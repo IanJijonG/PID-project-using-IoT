@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Control PID - HMI Profesional</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* CSS Variables for better maintainability */
+        :root {
+            --primary-dark: #0f3d66;
+            --primary: #1e6fbf;
+            --primary-light: #4a8fd8;
+            --text-light: #ffffff;
+            --text-dark: #333333;
+            --card-bg: #ffffff;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            --border-radius: 12px;
+            --spacing: 20px;
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            min-height: 100vh;
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing);
+        }
+
+        /* Header Styles */
+        .header {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 2rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            letter-spacing: 1px;
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--card-bg);
+            color: var(--text-dark);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h3 {
+            color: var(--primary-dark);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            border-bottom: 2px solid var(--primary-light);
+            padding-bottom: 0.5rem;
+        }
+
+        /* Flex Layout */
+        .flex {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .flex > * {
+            flex: 1 1 250px;
+        }
+
+        /* Value Display */
+        .value-container {
+            text-align: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+            border-radius: 8px;
+            margin: 0.5rem 0;
+        }
+
+        .value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            line-height: 1.2;
+        }
+
+        .value-label {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Form Elements */
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--primary-dark);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(30, 111, 191, 0.1);
+        }
+
+        input:hover {
+            border-color: var(--primary-light);
+        }
+
+        /* Button Styles */
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+        }
+
+        button {
+            background: var(--primary);
+            border: none;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: var(--transition);
+            border: 2px solid transparent;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: transparent;
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        button.secondary:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* PID Grid */
+        .pid-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Chart Container - Made Smaller */
+        .chart-container {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            box-shadow: var(--shadow);
+            margin-top: 1.5rem;
+            max-width: 600px;  /* Limit maximum width */
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .chart-container h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Smaller chart canvas */
+        #positionChart {
+            width: 100% !important;
+            height: 300px !important;  /* Reduced from 400px to 200px */
+            max-height: 300px;
+        }
+
+        /* Chart info bar */
+        .chart-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-connected {
+            background-color: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+        }
+
+        .status-disconnected {
+            background-color: #f44336;
+        }
+
+        /* Message styles */
+        .message {
+            font-size: 0.9rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header {
+                font-size: 2rem;
+            }
+            
+            .value {
+                font-size: 2.5rem;
+            }
+            
+            .container {
+                width: 95%;
+                padding: 0.5rem;
+            }
+
+            .chart-container {
+                max-width: 100%;
+            }
+
+            #positionChart {
+                height: 150px !important;  /* Even smaller on mobile */
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Sistema de Control PID</h1>
+            <div id="connectionStatus" class="status-indicator status-disconnected"></div>
+            <span id="statusText" style="font-size: 1rem;">Desconectado</span>
+        </header>
+
+        <div class="flex">
+            <!-- Position Card -->
+            <section class="card" aria-label="Posición actual">
+                <h3>📊 Posición Actual</h3>
+                <div class="value-container">
+                    <div class="value" id="position" aria-live="polite">--</div>
+                    <div class="value-label">grados</div>
+                </div>
+                <div id="lastUpdate" style="font-size: 0.8rem; color: #666; text-align: right;">
+                    Última actualización: --
+                </div>
+            </section>
+
+            <!-- PID Control Card -->
+            <section class="card" aria-label="Control PID">
+                <h3>⚙️ Configuración PID</h3>
+                <form id="pidForm" onsubmit="handlePIDSubmit(event)">
+                    <div class="pid-grid">
+                        <div class="input-group">
+                            <label for="kp">Kp (Proporcional)</label>
+                            <input type="number" id="kp" name="kp" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="ki">Ki (Integral)</label>
+                            <input type="number" id="ki" name="ki" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="kd">Kd (Derivativo)</label>
+                            <input type="number" id="kd" name="kd" step="0.01" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button type="submit">📤 Enviar PID</button>
+                        <button type="button" class="secondary" onclick="loadCurrentPID()">🔄 Cargar Actual</button>
+                    </div>
+                    <div id="pidMessage" class="message" style="display: none;"></div>
+                </form>
+            </section>
+        </div>
+
+        <!-- Manual Control Card -->
+        <section class="card" aria-label="Control Manual">
+            <h3>🎮 Control Manual</h3>
+            <div class="button-group">
+                <button onclick="sendCommand('START')" class="secondary">▶️ START</button>
+                <button onclick="sendCommand('STOP')" class="secondary">⏹️ STOP</button>
+                <button onclick="sendCommand('RESET')" class="secondary">🔄 RESET</button>
+                <button onclick="clearChart()" class="secondary">📊 Limpiar Gráfico</button>
+            </div>
+            <div id="commandMessage" class="message" style="display: none;"></div>
+        </section>
+
+        <!-- Chart Section - Smaller and Centered -->
+        <section class="chart-container" aria-label="Gráfico de posición">
+            <h3 style="color: var(--primary-dark);">📈 Historial de Posición</h3>
+            <canvas id="positionChart"></canvas>
+            <div class="chart-info">
+                <span>Datos en tiempo real</span>
+                <span id="dataPoints">Puntos: 0/50</span>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            MAX_DATA_POINTS: 50,
+            RECONNECTION_ATTEMPTS: 5,
+            CHART_UPDATE_INTERVAL: 100,
+            ANIMATION_DURATION: 0
+        };
+
+        // State Management
+        const state = {
+            positionData: [],
+            timeLabels: [],
+            isConnected: false,
+            reconnectionAttempts: 0,
+            chart: null
+        };
+
+        // DOM Elements
+        const elements = {
+            position: document.getElementById('position'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            connectionStatus: document.getElementById('connectionStatus'),
+            statusText: document.getElementById('statusText'),
+            pidMessage: document.getElementById('pidMessage'),
+            commandMessage: document.getElementById('commandMessage'),
+            dataPoints: document.getElementById('dataPoints'),
+            kp: document.getElementById('kp'),
+            ki: document.getElementById('ki'),
+            kd: document.getElementById('kd')
+        };
+
+        // Socket.IO Connection with error handling
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: CONFIG.RECONNECTION_ATTEMPTS,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
+
+        // Initialize Chart with smaller dimensions
+        function initializeChart() {
+            const ctx = document.getElementById('positionChart').getContext('2d');
+            
+            state.chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: state.timeLabels,
+                    datasets: [{
+                        label: 'Posición (°)',
+                        data: state.positionData,
+                        borderColor: '#1e6fbf',
+                        backgroundColor: 'rgba(30, 111, 191, 0.1)',
+                        borderWidth: 2,  // Thinner line for smaller chart
+                        pointRadius: 2,   // Smaller points
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: '#1e6fbf',
+                        pointBorderColor: 'white',
+                        pointBorderWidth: 1,
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: CONFIG.ANIMATION_DURATION
+                    },
+                    plugins: {
+                        legend: {
+                            display: false  // Hide legend to save space
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            titleFont: { size: 10 },
+                            bodyFont: { size: 10 }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: false  // Hide axis title to save space
+                            },
+                            ticks: {
+                                font: { size: 9 },  // Smaller font
+                                maxTicksLimit: 5     // Limit number of ticks
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                lineWidth: 0.5
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: { size: 9 },  // Smaller font
+                                maxRotation: 45,
+                                minRotation: 45,
+                                maxTicksLimit: 6     // Limit number of ticks
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    },
+                    layout: {
+                        padding: {
+                            top: 5,
+                            bottom: 5,
+                            left: 5,
+                            right: 5
+                        }
+                    }
+                }
+            });
+        }
+
+        // Socket Event Handlers
+        socket.on('connect', () => {
+            console.log('✅ Conectado al servidor');
+            updateConnectionStatus(true);
+            showMessage('Conexión establecida con el servidor', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Desconectado del servidor');
+            updateConnectionStatus(false);
+            showMessage('Conexión perdida. Intentando reconectar...', 'warning');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Error de conexión:', error);
+            showMessage('Error de conexión con el servidor', 'error');
+        });
+
+        socket.on('esp32_data', (data) => {
+            if (data && typeof data.temp === 'number') {
+                updatePositionData(data.temp);
+            }
+        });
+
+        socket.on('pid_current', (data) => {
+            if (data) {
+                elements.kp.value = data.kp || 0;
+                elements.ki.value = data.ki || 0;
+                elements.kd.value = data.kd || 0;
+                showMessage('Valores PID cargados', 'success', 'pidMessage');
+            }
+        });
+
+        // Update Functions
+        function updateConnectionStatus(connected) {
+            state.isConnected = connected;
+            
+            if (connected) {
+                elements.connectionStatus.className = 'status-indicator status-connected';
+                elements.statusText.textContent = 'Conectado';
+                elements.statusText.style.color = '#4caf50';
+            } else {
+                elements.connectionStatus.className = 'status-indicator status-disconnected';
+                elements.statusText.textContent = 'Desconectado';
+                elements.statusText.style.color = '#f44336';
+            }
+        }
+
+        function updatePositionData(value) {
+            // Update display
+            elements.position.textContent = value.toFixed(1);
+            elements.lastUpdate.textContent = `Última actualización: ${new Date().toLocaleTimeString()}`;
+            
+            // Update chart data
+            state.positionData.push(value);
+            state.timeLabels.push(new Date().toLocaleTimeString());
+            
+            // Maintain max data points
+            if (state.positionData.length > CONFIG.MAX_DATA_POINTS) {
+                state.positionData.shift();
+                state.timeLabels.shift();
+            }
+            
+            // Update chart
+            if (state.chart) {
+                state.chart.data.labels = state.timeLabels;
+                state.chart.data.datasets[0].data = state.positionData;
+                state.chart.update();
+            }
+            
+            // Update counter
+            elements.dataPoints.textContent = `Puntos: ${state.positionData.length}/${CONFIG.MAX_DATA_POINTS}`;
+        }
+
+        // Message Display Function
+        function showMessage(text, type = 'info', elementId = 'pidMessage') {
+            const messageElement = document.getElementById(elementId);
+            if (!messageElement) return;
+            
+            messageElement.textContent = text;
+            messageElement.style.display = 'block';
+            
+            switch(type) {
+                case 'success':
+                    messageElement.style.backgroundColor = '#d4edda';
+                    messageElement.style.color = '#155724';
+                    messageElement.style.border = '1px solid #c3e6cb';
+                    break;
+                case 'error':
+                    messageElement.style.backgroundColor = '#f8d7da';
+                    messageElement.style.color = '#721c24';
+                    messageElement.style.border = '1px solid #f5c6cb';
+                    break;
+                case 'warning':
+                    messageElement.style.backgroundColor = '#fff3cd';
+                    messageElement.style.color = '#856404';
+                    messageElement.style.border = '1px solid #ffeeba';
+                    break;
+                default:
+                    messageElement.style.backgroundColor = '#e2e3e5';
+                    messageElement.style.color = '#383d41';
+                    messageElement.style.border = '1px solid #d6d8db';
+            }
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                messageElement.style.display = 'none';
+            }, 3000);
+        }
+
+        // API Functions
+        async function handlePIDSubmit(event) {
+            event.preventDefault();
+            
+            const pidValues = {
+                kp: parseFloat(elements.kp.value) || 0,
+                ki: parseFloat(elements.ki.value) || 0,
+                kd: parseFloat(elements.kd.value) || 0
+            };
+            
+            try {
+                const response = await fetch('/set_pid', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(pidValues)
+                });
+                
+                if (response.ok) {
+                    showMessage('✅ Valores PID enviados correctamente', 'success', 'pidMessage');
+                } else {
+                    showMessage('❌ Error al enviar valores PID', 'error', 'pidMessage');
+                }
+            } catch (error) {
+                console.error('Error sending PID:', error);
+                showMessage('❌ Error de conexión', 'error', 'pidMessage');
+            }
+        }
+
+        async function sendCommand(command) {
+            try {
+                const response = await fetch('/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ cmd: command })
+                });
+                
+                if (response.ok) {
+                    showMessage(`✅ Comando ${command} ejecutado`, 'success', 'commandMessage');
+                } else {
+                    showMessage(`❌ Error al ejecutar ${command}`, 'error', 'commandMessage');
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                showMessage('❌ Error de conexión', 'error', 'commandMessage');
+            }
+        }
+
+        async function loadCurrentPID() {
+            try {
+                const response = await fetch('/get_pid');
+                const data = await response.json();
+                
+                if (data) {
+                    elements.kp.value = data.kp || 0;
+                    elements.ki.value = data.ki || 0;
+                    elements.kd.value = data.kd || 0;
+                    showMessage('✅ Valores actuales cargados', 'success', 'pidMessage');
+                }
+            } catch (error) {
+                console.error('Error loading PID:', error);
+                showMessage('❌ Error al cargar valores', 'error', 'pidMessage');
+            }
+        }
+
+        function clearChart() {
+            state.positionData = [];
+            state.timeLabels = [];
+            
+            if (state.chart) {
+                state.chart.data.labels = [];
+                state.chart.data.datasets[0].data = [];
+                state.chart.update();
+            }
+            
+            elements.dataPoints.textContent = `Puntos: 0/${CONFIG.MAX_DATA_POINTS}`;
+            showMessage('📊 Gráfico limpiado', 'success', 'commandMessage');
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeChart();
+            
+            // Try to load current PID values
+            setTimeout(loadCurrentPID, 1000);
+            
+            // Add keyboard support for form submission
+            document.getElementById('pidForm').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handlePIDSubmit(e);
+                }
+            });
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
+    </script>
+</body>
+</html>
