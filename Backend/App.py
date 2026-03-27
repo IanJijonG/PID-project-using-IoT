@@ -6,6 +6,8 @@ import serial
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+pidDict = {"kp":0, "ki":0, "kd": 0}
+setpointVar = 0
 
 temporalList = []
 
@@ -40,8 +42,12 @@ def handle_command(data):
     dataName = data.get("cmd")
     print(f"Comando recibido: {dataName}")
 
-    if dataName == "start":
-        print("Iniciar proceso")
+    if dataName == "pid":
+        commandFilter(dataName,"-",data)
+    elif dataName == "setpoint":
+        commandFilter(dataName,data.get("value"),data)
+    else:
+        commandFilter(dataName,data.get("action"),data)
 
 
 def read_from_serial():
@@ -71,10 +77,30 @@ def send_data():
 
         time.sleep(1)
 
-def commandFilter(command):
-    if command == "manual":
-        print("Modo manual activado")
+def commandFilter(command,action,data):
+    global setpointVar
 
+    if command == "manual" and action != "-":
+        print("Modo manual activado")
+        if action == "stop":
+            print("stop")
+        elif action == "start":
+            print("start")
+        elif action == "reset":
+            print("reset")
+
+    if command == "pid" and action == "-":
+        pidDict["kp"] = data.get("kp")
+        pidDict["ki"] = data.get("ki")
+        pidDict["kd"] = data.get("kd")
+
+        print(pidDict)
+    
+    if command == "setpoint":
+        setpointVar = float(action)
+        print( setpointVar)
+
+        
 threading.Thread(target=send_data, daemon=True).start()
 
 
