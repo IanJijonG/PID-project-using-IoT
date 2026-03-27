@@ -8,6 +8,7 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 pidDict = {"kp":0, "ki":0, "kd": 0}
 setpointVar = 0
+currentMode = "velocity"
 
 temporalList = []
 
@@ -78,7 +79,7 @@ def send_data():
         time.sleep(1)
 
 def commandFilter(command,action,data):
-    global setpointVar
+    global setpointVar, currentMode
 
     if command == "manual" and action != "-":
         print("Modo manual activado")
@@ -89,16 +90,20 @@ def commandFilter(command,action,data):
         elif action == "reset":
             print("reset")
 
-    if command == "pid" and action == "-":
+    elif command == "pid" and action == "-":
         pidDict["kp"] = data.get("kp")
         pidDict["ki"] = data.get("ki")
         pidDict["kd"] = data.get("kd")
 
         print(pidDict)
     
-    if command == "setpoint":
+    elif command == "setpoint":
         setpointVar = float(action)
         print( setpointVar)
+    
+
+    elif command == "control_mode":
+        currentMode= data.get("mode")
 
         
 threading.Thread(target=send_data, daemon=True).start()

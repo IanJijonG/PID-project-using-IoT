@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HMI Control + Código + Manual (Start/Stop/Reset)</title>
+    <title>HMI Control + Código + Manual (Posición/Velocidad)</title>
 
     <!-- Socket.io y Chart.js desde CDN -->
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
@@ -150,6 +150,29 @@
         .btn-reset:hover {
             background: #d97706;
         }
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            justify-content: center;
+        }
+        .mode-btn {
+            flex: 1;
+            margin: 0;
+            padding: 10px;
+            font-size: 0.9rem;
+            background: #64748b;
+        }
+        .mode-btn.active {
+            background: #1e6bff;
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #1e6bff;
+        }
+        .mode-position.active {
+            background: #1e6bff;
+        }
+        .mode-velocity.active {
+            background: #10b981;
+        }
         textarea {
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
@@ -193,6 +216,21 @@
             margin: 10px 0;
             font-style: italic;
         }
+        .mode-indicator {
+            text-align: center;
+            padding: 8px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .mode-position-indicator {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .mode-velocity-indicator {
+            background: #d1fae5;
+            color: #065f46;
+        }
     </style>
 </head>
 <body>
@@ -210,12 +248,34 @@
     <!-- Primera fila: Posición, PID, Manual simple (3 cards) -->
     <div class="grid">
 
-        <!-- POSICIÓN + SETPOINT -->
+        <!-- POSICIÓN + SETPOINT con selector de modo -->
         <div class="card">
-            <h2>📍 Posición Actual</h2>
+            <h2>📍 Control de Sistema</h2>
+            
+            <!-- Selector de modo POSICIÓN / VELOCIDAD -->
+            <div class="mode-selector">
+                <button id="modePositionBtn" class="mode-btn mode-position active" onclick="setControlMode('position')">
+                    🎯 Modo Posición
+                </button>
+                <button id="modeVelocityBtn" class="mode-btn mode-velocity" onclick="setControlMode('velocity')">
+                    ⚡ Modo Velocidad
+                </button>
+            </div>
+            
+            <!-- Indicador visual del modo actual -->
+            <div id="modeIndicator" class="mode-indicator mode-position-indicator">
+                🎯 Modo POSICIÓN activo
+            </div>
+            
+            <!-- Valor actual según modo -->
             <div class="big" id="position">0.00</div>
-            <label for="setpoint">Setpoint (deseado)</label>
-            <input id="setpoint" type="number" step="0.1" value="0.0">
+            <div id="modeValueLabel" style="text-align: center; font-size: 0.8rem; color: #64748b; margin-top: -10px;">
+                Posición actual
+            </div>
+            
+            <!-- Setpoint dinámico -->
+            <label id="setpointLabel" for="setpoint">Setpoint (posición deseada)</label>
+            <input id="setpoint" type="number" step="0.1" value="0.0" placeholder="Ingrese setpoint...">
             <button onclick="sendSetpoint()">📨 Enviar Setpoint</button>
         </div>
 
@@ -229,6 +289,9 @@
             <label>Kd (derivativo)</label>
             <input id="kd" type="number" step="0.01" value="0.05">
             <button onclick="sendPID()">⚡ Actualizar PID</button>
+            <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
+                ℹ️ Los parámetros PID se aplican según el modo seleccionado
+            </p>
         </div>
 
         <!-- CONTROL MANUAL SIMPLE (Start / Stop / Reset) -->
@@ -245,7 +308,7 @@
             <p class="info-text">
                 START: inicia movimiento<br>
                 STOP: detiene emergencia<br>
-                RESET: vuelve a posición cero
+                RESET: vuelve a posición/velocidad cero
             </p>
         </div>
     </div>
@@ -288,35 +351,107 @@ void loop() {
         <div class="card">
             <h2>📈 Gráfica en Tiempo Real</h2>
             <canvas id="chart" style="max-height:280px; width:100%;"></canvas>
-            <p style="font-size:0.8rem; color:#334155; text-align:center;">Últimos 50 puntos</p>
+            <p style="font-size:0.8rem; color:#334155; text-align:center;">
+                Últimos 50 puntos - <span id="graphModeLabel">Posición</span>
+            </p>
         </div>
     </div>
 
     <!-- Footer opcional -->
     <div class="footer-note">
-        ⚡ HMI 
+        ⚡ HMI - Modos: Posición (PID posición) | Velocidad (PID velocidad)
     </div>
 </div>
 
 <script>
-    // Conexión Socket.IO (asume mismo host, ajusta si es necesario)
+    // ==================== CONFIGURACIÓN INICIAL ====================
+    let currentMode = 'position'; // 'position' o 'velocity'
+    
+    // Conexión Socket.IO
     const socket = io({
         transports: ['websocket'],
-
     });
 
-    // Referencias
+    // Referencias DOM
     const statusSpan = document.getElementById('status');
     const positionDiv = document.getElementById('position');
+    const modeIndicator = document.getElementById('modeIndicator');
+    const modeValueLabel = document.getElementById('modeValueLabel');
+    const setpointLabel = document.getElementById('setpointLabel');
+    const setpointInput = document.getElementById('setpoint');
+    const graphModeLabel = document.getElementById('graphModeLabel');
+    const modePositionBtn = document.getElementById('modePositionBtn');
+    const modeVelocityBtn = document.getElementById('modeVelocityBtn');
 
-    // Inicializar Chart.js
+    // ==================== FUNCIÓN PARA CAMBIAR MODO ====================
+    function setControlMode(mode) {
+        if (mode === currentMode) return;
+        
+        currentMode = mode;
+        
+        // Actualizar interfaz según modo
+        if (mode === 'position') {
+            // Cambiar textos y estilos para modo posición
+            modeIndicator.innerHTML = '🎯 Modo POSICIÓN activo';
+            modeIndicator.className = 'mode-indicator mode-position-indicator';
+            setpointLabel.innerHTML = 'Setpoint (posición deseada)';
+            setpointInput.placeholder = 'Ingrese posición deseada (ej: 100)';
+            modeValueLabel.innerHTML = 'Posición actual';
+            graphModeLabel.innerHTML = 'Posición';
+            
+            // Actualizar botones
+            modePositionBtn.classList.add('active');
+            modeVelocityBtn.classList.remove('active');
+            modePositionBtn.style.background = '#1e6bff';
+            modeVelocityBtn.style.background = '#64748b';
+            
+            // Cambiar título del valor grande
+            const positionValue = parseFloat(positionDiv.innerText);
+            positionDiv.style.background = '#e0e7ff';
+            
+        } else {
+            // Cambiar textos y estilos para modo velocidad
+            modeIndicator.innerHTML = '⚡ Modo VELOCIDAD activo';
+            modeIndicator.className = 'mode-indicator mode-velocity-indicator';
+            setpointLabel.innerHTML = 'Setpoint (velocidad deseada)';
+            setpointInput.placeholder = 'Ingrese velocidad deseada (ej: 50)';
+            modeValueLabel.innerHTML = 'Velocidad actual';
+            graphModeLabel.innerHTML = 'Velocidad';
+            
+            // Actualizar botones
+            modeVelocityBtn.classList.add('active');
+            modePositionBtn.classList.remove('active');
+            modeVelocityBtn.style.background = '#10b981';
+            modePositionBtn.style.background = '#64748b';
+            
+            // Cambiar título del valor grande
+            positionDiv.style.background = '#d1fae5';
+        }
+        
+        // Enviar cambio de modo al servidor
+        socket.emit('command', {
+            cmd: 'control_mode',
+            mode: mode,
+            timestamp: Date.now()
+        });
+        
+        console.log(`Modo cambiado a: ${mode}`);
+        
+        // Feedback visual
+        positionDiv.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+            positionDiv.style.transform = 'scale(1)';
+        }, 200);
+    }
+
+    // ==================== INICIALIZAR CHART.JS ====================
     const ctx = document.getElementById('chart').getContext('2d');
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
-                label: 'Posición',
+                label: 'Valor Actual',
                 data: [],
                 borderColor: '#1e6bff',
                 backgroundColor: 'rgba(30,107,255,0.1)',
@@ -330,73 +465,145 @@ void loop() {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { beginAtZero: true }
+                y: { 
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Valor'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Muestras'
+                    }
+                }
             }
         }
     });
 
-    // --- Actualizar estado conexión ---
+    // ==================== FUNCIONES DE SOCKET ====================
+    // Actualizar estado conexión
     socket.on('connect', () => {
         statusSpan.innerText = 'CONECTADO';
         statusSpan.className = 'status connected';
+        console.log('Conectado al servidor');
+        
+        // Solicitar modo actual al servidor al conectar
+        socket.emit('command', {
+            cmd: 'get_mode'
+        });
     });
 
     socket.on('disconnect', () => {
         statusSpan.innerText = 'DESCONECTADO';
         statusSpan.className = 'status disconnected';
+        console.log('Desconectado del servidor');
     });
 
-    // --- Recibir datos del servidor (posición) ---
+    // Recibir datos del servidor (posición o velocidad según modo)
     socket.on('data', (msg) => {
         if (msg && msg.position !== undefined) {
-            const pos = parseFloat(msg.position).toFixed(2);
-            positionDiv.innerText = pos;
-
-            // Agregar a gráfica
+            const value = parseFloat(msg.position).toFixed(2);
+            positionDiv.innerText = value;
+            
+            // Actualizar gráfica
             chart.data.labels.push('');
             chart.data.datasets[0].data.push(msg.position);
+            
+            // Cambiar color de la gráfica según modo
+            if (currentMode === 'position') {
+                chart.data.datasets[0].borderColor = '#1e6bff';
+            } else {
+                chart.data.datasets[0].borderColor = '#10b981';
+            }
+            
             if (chart.data.labels.length > 50) {
                 chart.data.labels.shift();
                 chart.data.datasets[0].data.shift();
             }
             chart.update();
         }
+        
+        // Si el servidor envía el modo actual
+        if (msg && msg.mode) {
+            setControlMode(msg.mode);
+        }
+    });
+    
+    // Recibir confirmación de cambio de modo
+    socket.on('mode_changed', (data) => {
+        console.log('Modo cambiado en servidor:', data);
+        if (data && data.mode && data.mode !== currentMode) {
+            setControlMode(data.mode);
+        }
     });
 
-    // --- Enviar setpoint ---
+    // ==================== FUNCIONES DE CONTROL ====================
+    // Enviar setpoint
     function sendSetpoint() {
         const sp = document.getElementById('setpoint').value;
-        if (sp === '') return;
+        if (sp === '' || isNaN(sp)) {
+            alert('Por favor ingrese un valor válido');
+            return;
+        }
+        
         socket.emit('command', {
             cmd: 'setpoint',
-            value: parseFloat(sp)
+            value: parseFloat(sp),
+            mode: currentMode,  // Enviar el modo actual
+            timestamp: Date.now()
         });
-        console.log('Setpoint enviado:', sp);
+        
+        console.log(`Setpoint enviado (${currentMode}):`, sp);
+        
+        // Feedback visual
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = '✓ Enviado!';
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 1000);
     }
 
-    // --- Enviar PID ---
+    // Enviar PID
     function sendPID() {
         const kp = document.getElementById('kp').value;
         const ki = document.getElementById('ki').value;
         const kd = document.getElementById('kd').value;
-        if (kp === '' || ki === '' || kd === '') return;
+        
+        if (kp === '' || ki === '' || kd === '') {
+            alert('Complete todos los valores PID');
+            return;
+        }
+        
         socket.emit('command', {
             cmd: 'pid',
             kp: parseFloat(kp),
             ki: parseFloat(ki),
-            kd: parseFloat(kd)
+            kd: parseFloat(kd),
+            mode: currentMode  // Enviar el modo para aplicar PID específico
         });
-        console.log('PID enviado');
+        
+        console.log('PID enviado para modo:', currentMode);
+        
+        // Feedback visual
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = '✓ PID Actualizado!';
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 1000);
     }
 
-    // --- CONTROL MANUAL SIMPLE: START, STOP, RESET ---
+    // Control manual
     function sendManualStart() {
         socket.emit('command', {
             cmd: 'manual',
-            action: 'start'
+            action: 'start',
+            mode: currentMode
         });
-        console.log('Comando: START');
-        // Feedback visual rápido
+        console.log('Comando: START en modo', currentMode);
         positionDiv.style.backgroundColor = '#d1fae5';
         setTimeout(() => positionDiv.style.backgroundColor = '', 200);
     }
@@ -404,7 +611,8 @@ void loop() {
     function sendManualStop() {
         socket.emit('command', {
             cmd: 'manual',
-            action: 'stop'
+            action: 'stop',
+            mode: currentMode
         });
         console.log('Comando: STOP');
         positionDiv.style.backgroundColor = '#fee2e2';
@@ -414,14 +622,18 @@ void loop() {
     function sendManualReset() {
         socket.emit('command', {
             cmd: 'manual',
-            action: 'reset'
+            action: 'reset',
+            mode: currentMode
         });
-        console.log('Comando: RESET');
+        console.log('Comando: RESET en modo', currentMode);
         positionDiv.style.backgroundColor = '#fed7aa';
         setTimeout(() => positionDiv.style.backgroundColor = '', 200);
+        
+        // Opcional: resetear setpoint a 0
+        setpointInput.value = '0';
     }
 
-    // --- ENVÍO DE CÓDIGO ---
+    // Envío de código
     function sendCodeToMicro() {
         const language = document.getElementById('codeLanguage').value;
         const code = document.getElementById('codeArea').value.trim();
@@ -436,6 +648,7 @@ void loop() {
         socket.emit('code', {
             language: language,
             code: code,
+            mode: currentMode,
             timestamp: Date.now()
         });
 
@@ -449,7 +662,7 @@ void loop() {
         document.getElementById('codeFeedback').innerText = '';
     }
 
-    // Opcional: recibir ACK del código
+    // Recibir ACK del código
     socket.on('code_ack', (data) => {
         const feedback = document.getElementById('codeFeedback');
         if (data && data.success) {
@@ -461,14 +674,18 @@ void loop() {
         }
     });
 
-    // Opcional: recibir valores PID actuales
+    // Recibir valores PID actuales
     socket.on('pid_current', (pid) => {
         if (pid.kp !== undefined) document.getElementById('kp').value = pid.kp;
         if (pid.ki !== undefined) document.getElementById('ki').value = pid.ki;
         if (pid.kd !== undefined) document.getElementById('kd').value = pid.kd;
+        if (pid.mode) {
+            console.log('PID actual para modo:', pid.mode);
+        }
     });
 
-    // Exponer funciones globalmente
+    // ==================== EXPONER FUNCIONES GLOBALMENTE ====================
+    window.setControlMode = setControlMode;
     window.sendSetpoint = sendSetpoint;
     window.sendPID = sendPID;
     window.sendManualStart = sendManualStart;
@@ -477,6 +694,7 @@ void loop() {
     window.sendCodeToMicro = sendCodeToMicro;
     window.clearCode = clearCode;
 
+    console.log('HMI inicializado - Modo por defecto: POSICIÓN');
 </script>
 
 </body>
