@@ -3,6 +3,7 @@ from flask_socketio import SocketIO, emit
 import threading
 import time
 import serial
+import subprocess
 import json
 
 app = Flask(__name__)
@@ -14,6 +15,9 @@ setpointJson = {"sp":0}
 modeJson = {"mode":0}
 
 temporalList = []
+
+FQBN = "arduino:avr:uno"
+PROYECTO = "ArduinoCodes"
 
 
 
@@ -69,6 +73,21 @@ def read_from_serial():
 
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
+
+def run_command(cmd):
+    
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print("---- ERROR ----")
+        print(result.stderr.strip())
+        print("---- OUTPUT ----")
+        print(result.stdout.strip())
+        return False
 
 
 def send_data():
