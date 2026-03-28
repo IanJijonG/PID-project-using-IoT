@@ -3,14 +3,19 @@ from flask_socketio import SocketIO, emit
 import threading
 import time
 import serial
+import json
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-pidDict = {"kp":0, "ki":0, "kd": 0}
-setpointVar = 0
-currentMode = "velocity"
+pidJson = {"kp":0, "ki":0, "kd": 0}
+
+currentMode = 0
+setpointJson = {"sp":0}
+modeJson = {"mode":0}
 
 temporalList = []
+
+
 
 def connectionSerial():
 
@@ -22,7 +27,6 @@ def connectionSerial():
         print(f"Error al abrir el puerto serial: {e}")
         return None
     
-ser = connectionSerial()
 
 @app.route("/")
 def helloWorld():
@@ -31,11 +35,13 @@ def helloWorld():
 
 @socketio.on("connect")
 def handle_connect():
+    global ser
+    ser = connectionSerial()
     print("Cliente conectado")
 
-# Desconexión
 @socketio.on("disconnect")
 def handle_disconnect():
+    ser.close()
     print("Cliente desconectado")
 
 @socketio.on("command")
@@ -65,7 +71,6 @@ def read_from_serial():
         print(f"Error al abrir el puerto serial: {e}")
 
 
-
 def send_data():
     index = 0
     while True:
@@ -85,26 +90,38 @@ def commandFilter(command,action,data):
         print("Modo manual activado")
         if action == "stop":
             print("stop")
+            modeJson["mode"] = "stop"
+            writeJsonSerial(ser,modeJson)
         elif action == "start":
+            modeJson["mode"] = "start"
             print("start")
         elif action == "reset":
+            modeJson["mode"] = "reset"
             print("reset")
 
     elif command == "pid" and action == "-":
-        pidDict["kp"] = data.get("kp")
-        pidDict["ki"] = data.get("ki")
-        pidDict["kd"] = data.get("kd")
+        pidJson["kp"] = data.get("kp")
+        pidJson["ki"] = data.get("ki")
+        pidJson["kd"] = data.get("kd")
 
-        print(pidDict)
+        print(pidJson)
+
+        writeJsonSerial(ser,pidJson)
     
     elif command == "setpoint":
         setpointVar = float(action)
         print( setpointVar)
+        setpointJson["sp"] = setpointVar
+
+        writeJsonSerial(ser,setpointJson)
     
 
     elif command == "control_mode":
         currentMode= data.get("mode")
 
+def writeJsonSerial(ser, data):
+    json_str = json.dumps(data) + '\n'
+    ser.write(json_str.encode('utf-8'))
         
 threading.Thread(target=send_data, daemon=True).start()
 
