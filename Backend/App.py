@@ -9,13 +9,13 @@ import SerialManager as serialM
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-pidJson = {"kp":0, "ki":0, "kd": 0}
+JsonVar = {"kp":None, "ki":None, "kd": None,"sp":None,"mode":None,"button":None}
 
 currentMode = 0
-setpointJson = {"sp":0}
-modeJson = {"mode":0}
 
 temporalList = []
+
+last_serial_time = 0
 
 
 
@@ -94,42 +94,53 @@ def commandFilter(command,action,data):
 
     if command == "manual" and action != "-":
         print("Modo manual activado")
+
         if action == "stop":
             print("stop")
-            modeJson["mode"] = "stop"
-            serialM.writeJsonSerial(ser,modeJson)
+            JsonVar["button"] = "stop"
+            
+            UpdateJsonArduino()
 
         elif action == "start":
-            modeJson["mode"] = "start"
-            serialM.writeJsonSerial(ser,modeJson)
+            JsonVar["button"] = "start"
             print("start")
 
+            UpdateJsonArduino()
+
         elif action == "reset":
-            modeJson["mode"] = "reset"
-            serialM.writeJsonSerial(ser,modeJson)
             print("reset")
+            JsonVar["button"] = "reset"
 
     elif command == "pid" and action == "-":
-        pidJson["kp"] = data.get("kp")
-        pidJson["ki"] = data.get("ki")
-        pidJson["kd"] = data.get("kd")
+        JsonVar["kp"] = data.get("kp")
+        JsonVar["ki"] = data.get("ki")
+        JsonVar["kd"] = data.get("kd")
 
-        print(pidJson)
+        UpdateJsonArduino()
 
-        serialM.writeJsonSerial(ser,pidJson)
-    
     elif command == "setpoint":
         setpointVar = float(action)
         print( setpointVar)
-        setpointJson["sp"] = setpointVar
+        JsonVar["sp"] = setpointVar
 
-        serialM.writeJsonSerial(ser,setpointJson)
-    
+        UpdateJsonArduino()
 
     elif command == "control_mode":
         currentMode= data.get("mode")
+        JsonVar["mode"] = str(currentMode)
+        print(currentMode)
 
+        UpdateJsonArduino()
 
+        
+
+def UpdateJsonArduino():
+    global JsonVar
+
+    if None in JsonVar:
+        print("Agrega valores válidos")
+    else:
+        serialM.writeJsonSerial(ser,JsonVar)
 def DbWorker():
     DBConn.init_db()
 
