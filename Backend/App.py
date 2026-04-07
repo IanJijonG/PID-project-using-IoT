@@ -2,9 +2,7 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import threading
 import time
-import serial
 import subprocess
-import json
 import DBConnection as DBConn
 import queue
 import SerialManager as serialM
