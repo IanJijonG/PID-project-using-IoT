@@ -9,7 +9,7 @@ import SerialManager as serialM
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-JsonVar = {"kp":None, "ki":None, "kd": None,"sp":None,"mode":None,"button":None}
+JsonVar = {"kp":1.0, "ki":0.1, "kd": 0.05,"sp":0,"mode":False,"button":2}
 
 currentMode = 0
 
@@ -26,8 +26,6 @@ db_queue = queue.Queue(QUEUE_MAX)
 
 FQBN = "arduino:avr:uno"
 PROYECTO = "ArduinoCodes"
-
-
 
 
 @app.route("/")
@@ -97,19 +95,20 @@ def commandFilter(command,action,data):
 
         if action == "stop":
             print("stop")
-            JsonVar["button"] = "stop"
-            
+            JsonVar["button"] = 2
+
             UpdateJsonArduino()
 
         elif action == "start":
-            JsonVar["button"] = "start"
+            JsonVar["button"] = 1
             print("start")
 
             UpdateJsonArduino()
 
         elif action == "reset":
             print("reset")
-            JsonVar["button"] = "reset"
+            JsonVar["button"] = 0
+            UpdateJsonArduino()
 
     elif command == "pid" and action == "-":
         JsonVar["kp"] = data.get("kp")
@@ -127,8 +126,13 @@ def commandFilter(command,action,data):
 
     elif command == "control_mode":
         currentMode= data.get("mode")
-        JsonVar["mode"] = str(currentMode)
+        
+        if currentMode == "velocity":
+            JsonVar["mode"] = True
+        else:
+            JsonVar["mode"] = False
         print(currentMode)
+
 
         UpdateJsonArduino()
 
@@ -141,6 +145,7 @@ def UpdateJsonArduino():
         print("Agrega valores válidos")
     else:
         serialM.writeJsonSerial(ser,JsonVar)
+
 def DbWorker():
     DBConn.init_db()
 
