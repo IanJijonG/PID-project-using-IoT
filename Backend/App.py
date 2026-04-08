@@ -17,6 +17,8 @@ temporalList = []
 
 last_serial_time = 0
 
+ser = serialM.connectionSerial()
+
 
 
 QUEUE_MAX = 3000
@@ -41,8 +43,13 @@ def handle_connect():
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    ser.close()
-    print("Cliente desconectado")
+    global ser
+
+    try:
+        if ser and ser.is_open:
+            ser.close()
+    except:
+        pass
 
 @socketio.on("command")
 def handle_command(data):
@@ -77,7 +84,7 @@ def send_data_Fronted():
     while True:
         index += 1
         
-        position = serialM.read_from_serial()
+        position = serialM.read_from_serial(ser)
         socketio.emit("data", {
             "position": position,
         })
@@ -139,9 +146,9 @@ def commandFilter(command,action,data):
         
 
 def UpdateJsonArduino():
-    global JsonVar
+    global JsonVar, ser
 
-    if None in JsonVar:
+    if any(v is None for v in JsonVar.values()):
         print("Agrega valores válidos")
     else:
         serialM.writeJsonSerial(ser,JsonVar)
@@ -168,7 +175,7 @@ def DbWorker():
         for _ in lote:
             db_queue.task_done()
 
-threading.Thread(target=DbWorker,daemon=True).start()
+#threading.Thread(target=DbWorker,daemon=True).start()
 
 threading.Thread(target=send_data_Fronted, daemon=True).start()
 
