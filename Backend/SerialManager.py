@@ -8,6 +8,7 @@ def connectionSerial():
 
     try:
         ser = serial.Serial('COM4', 115200)
+        ser.timeout = 0
         return ser
     
     except serial.SerialException as e:
@@ -30,32 +31,35 @@ def reconnect_serial(ser):
     else:
         print("Fallo reconexión")
 
-
 def read_from_serial(ser):
-    global warmUp
+    global warmUp, temporalList
 
     try:
-        
-        position = ser.readline().decode().strip()
+        if ser.in_waiting > 0:
 
-        try:
+            position = ser.readline().decode(errors='ignore').strip()
 
-            temporalList.append(position)
+            if not position:
+                return None
 
-        
-            if warmUp < 11:
-                warmUp += 1
+            try:
+                temporalList.append(position)
 
-            else:
-                position = float(position)
-                return position
-            
-        except ValueError:
-            print(f"Datos inválidos: {position}")
+                if warmUp < 11:
+                    warmUp += 1
+                    return None
+                else:
+                    return float(position)
 
-    except serial.SerialException as e:
-        print(f"Error al abrir el puerto serial: {e}")
+            except ValueError:
+                return None
 
+        else:
+            return None
+
+    except Exception as e:
+        print(f"Error serial: {e}")
+        return None
 
 """
 def read_from_serial(ser):
