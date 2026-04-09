@@ -19,14 +19,16 @@ def init_db():
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(sql_statements)
+        for stmt in sql_statements:
+            cursor.execute(stmt)
 
 def save_position(lote):
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(
+        cursor.executemany(
             "INSERT INTO measurements (position) VALUES (?)",
             [(p,) for p in lote]
         )
 
+        conn.commit()  # 👈 asegura escritura inmediata
