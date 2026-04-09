@@ -7,9 +7,12 @@ import DBConnection as DBConn
 import queue
 import SerialManager as serialM
 
+
+
 app = Flask(__name__)
 socketio = SocketIO(app)
 JsonVar = {"kp":1.0, "ki":0.1, "kd": 0.05,"sp":0,"mode":False,"button":2}
+serial_lock = threading.Lock()
 
 currentMode = 0
 
@@ -83,19 +86,17 @@ def run_commandCLI(cmd):
 
 def send_data_Fronted():
     global ser
-    index = 0
+    buffer = []
+    last_emit = time.time()
+
     while True:
-        index += 1
-        
-        position = serialM.read_from_serial(ser)
-        socketio.emit("data", {
-            "position": position,
-        })
+        with serial_lock:
+            position = serialM.read_from_serial(ser)
 
         if position is not None:
-
             try:
                 position = float(position)
+                buffer.append(position)
 
                 if not db_queue.full():
                     db_queue.put(position)
@@ -103,7 +104,15 @@ def send_data_Fronted():
             except:
                 print("Dato inválido:", position)
 
-        time.sleep(0.01)
+        if time.time() - last_emit >= 0.1:
+            if buffer:
+                socketio.emit("data", {
+                    "positions": buffer
+                })
+                buffer = []
+            last_emit = time.time()
+
+        socketio.sleep(0.01)
 
 def commandFilter(command,action,data):
     global setpointVar, currentMode
@@ -160,7 +169,8 @@ def UpdateJsonArduino():
     if any(v is None for v in JsonVar.values()):
         print("Agrega valores válidos")
     else:
-        serialM.writeJsonSerial(ser,JsonVar)
+        with serial_lock:
+            serialM.writeJsonSerial(ser, JsonVar)
 
 def DbWorker():
     DBConn.init_db()
