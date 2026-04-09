@@ -17,9 +17,7 @@ temporalList = []
 
 last_serial_time = 0
 
-ser = serialM.connectionSerial()
-
-
+ser = None
 
 QUEUE_MAX = 3000
 DB_BATCH_SIZE = 100
@@ -38,9 +36,14 @@ def Rederizer():
 @socketio.on("connect")
 def handle_connect():
     global ser
-    ser = serialM.connectionSerial()
-    print("Cliente conectado")
 
+    if ser is None or not ser.is_open:
+        ser = serialM.connectionSerial()
+
+        threading.Thread(target=send_data_Fronted, daemon=True).start()
+        threading.Thread(target=DbWorker, daemon=True).start()
+
+    print("Cliente conectado")
 @socketio.on("disconnect")
 def handle_disconnect():
     global ser
@@ -78,8 +81,8 @@ def run_commandCLI(cmd):
         print(result.stdout.strip())
         return False
 
-
 def send_data_Fronted():
+    global ser
     index = 0
     while True:
         index += 1
@@ -89,10 +92,18 @@ def send_data_Fronted():
             "position": position,
         })
 
-        if not db_queue.full():
-            db_queue.put(position)
+        if position is not None:
 
-        time.sleep(0.5)
+            try:
+                position = float(position)
+
+                if not db_queue.full():
+                    db_queue.put(position)
+
+            except:
+                print("Dato inválido:", position)
+
+        time.sleep(0.01)
 
 def commandFilter(command,action,data):
     global setpointVar, currentMode
@@ -143,8 +154,6 @@ def commandFilter(command,action,data):
 
         UpdateJsonArduino()
 
-        
-
 def UpdateJsonArduino():
     global JsonVar, ser
 
@@ -175,11 +184,7 @@ def DbWorker():
         for _ in lote:
             db_queue.task_done()
 
-#threading.Thread(target=DbWorker,daemon=True).start()
-
-threading.Thread(target=send_data_Fronted, daemon=True).start()
-
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, use_reloader=False)
 
