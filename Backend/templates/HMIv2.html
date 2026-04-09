@@ -502,35 +502,47 @@ void loop() {
     });
 
     // Recibir datos del servidor (posición o velocidad según modo)
-    socket.on('data', (msg) => {
-        if (msg && msg.position !== undefined) {
-            const value = parseFloat(msg.position).toFixed(2);
-            positionDiv.innerText = value;
-            
-            // Actualizar gráfica
+socket.on('data', (msg) => {
+
+    // 🔹 Caso NUEVO: recibes múltiples datos (buffer)
+    if (msg && msg.positions) {
+
+        msg.positions.forEach((pos) => {
+
+            // actualizar valor grande (solo el último realmente importa)
+            positionDiv.innerText = parseFloat(pos).toFixed(2);
+
             chart.data.labels.push('');
-            chart.data.datasets[0].data.push(msg.position);
-            
-            // Cambiar color de la gráfica según modo
-            if (currentMode === 'position') {
-                chart.data.datasets[0].borderColor = '#1e6bff';
-            } else {
-                chart.data.datasets[0].borderColor = '#10b981';
-            }
-            
+            chart.data.datasets[0].data.push(pos);
+
+            // limitar tamaño
             if (chart.data.labels.length > 50) {
                 chart.data.labels.shift();
                 chart.data.datasets[0].data.shift();
             }
-            chart.update();
+        });
+
+        // 
+        chart.update();
+    }
+
+    // 🔹 Compatibilidad (por si aún llega un solo dato)
+    else if (msg && msg.position !== undefined) {
+
+        const value = parseFloat(msg.position).toFixed(2);
+        positionDiv.innerText = value;
+
+        chart.data.labels.push('');
+        chart.data.datasets[0].data.push(msg.position);
+
+        if (chart.data.labels.length > 50) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
         }
-        
-        // Si el servidor envía el modo actual
-        if (msg && msg.mode) {
-            setControlMode(msg.mode);
-        }
-    });
-    
+
+        chart.update();
+    }
+});
     // Recibir confirmación de cambio de modo
     socket.on('mode_changed', (data) => {
         console.log('Modo cambiado en servidor:', data);
