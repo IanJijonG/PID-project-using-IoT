@@ -2,7 +2,7 @@ import serial
 import json
 
 temporalList = []
-warmup = 0
+warmUp = 0
 
 def connectionSerial():
 
@@ -32,6 +32,7 @@ def reconnect_serial(ser):
 
 
 def read_from_serial(ser):
+    global warmUp
 
     try:
         
