@@ -20,6 +20,8 @@ temporalList = []
 
 last_serial_time = 0
 
+intervalSer = 0
+
 ser = None
 
 QUEUE_MAX = 3000
@@ -45,6 +47,7 @@ def handle_connect():
 
         threading.Thread(target=send_data_Fronted, daemon=True).start()
         threading.Thread(target=DbWorker, daemon=True).start()
+        #threading.Thread(target=WatchDog,daemon=True).start()
 
     print("Cliente conectado")
 @socketio.on("disconnect")
@@ -66,8 +69,11 @@ def handle_command(data):
         commandFilter(dataName,"-",data)
     elif dataName == "setpoint":
         commandFilter(dataName,data.get("value"),data)
+    elif dataName == "Code":
+        commandFilter(dataName,data.get("code"),data)
     else:
         commandFilter(dataName,data.get("action"),data)
+    
 
 def run_commandCLI(cmd):
     
@@ -85,14 +91,14 @@ def run_commandCLI(cmd):
         return False
 
 def send_data_Fronted():
-    global ser
+    global ser, intervalSer
     buffer = []
     last_emit = time.time()
 
     while True:
         with serial_lock:
-            position = serialM.read_from_serial(ser)
-
+            position,intervalSer = serialM.read_from_serial(ser)
+        
         if position is not None:
             try:
                 position = float(position)
@@ -105,6 +111,7 @@ def send_data_Fronted():
                 print("Dato inválido:", position)
 
         if time.time() - last_emit >= 0.1:
+            print(buffer)
             if buffer:
                 socketio.emit("data", {
                     "positions": buffer
@@ -113,6 +120,50 @@ def send_data_Fronted():
             last_emit = time.time()
 
         socketio.sleep(0.01)
+
+    
+def reconnect_serial():
+    global ser
+
+    try:
+        with serial_lock:
+            if ser:
+                try:
+                    ser.close()
+                except:
+                    pass
+
+            print("Reintentando conexión serial...")
+
+            ser = serialM.connectionSerial()
+
+            if ser and ser.is_open:
+                print("Serial reconectado correctamente")
+                return True
+            else:
+                print("Fallo al reconectar serial")
+                return False
+
+    except Exception as e:
+        print("Error en reconexión serial:", e)
+        return False
+
+def WatchDog():
+    global intervalSer
+
+    TIMEOUT = 2.0
+
+    while True:
+        time.sleep(0.5)
+
+        if intervalSer is None:
+            continue
+
+
+        if intervalSer > TIMEOUT:
+            print("Watchdog: sistema sin respuesta, reconectando...")
+            reconnect_serial()
+            intervalSer = None
 
 def commandFilter(command,action,data):
     global setpointVar, currentMode
@@ -165,6 +216,8 @@ def commandFilter(command,action,data):
 
 def UpdateJsonArduino():
     global JsonVar, ser
+
+    print(JsonVar)
 
     if any(v is None for v in JsonVar.values()):
         print("Agrega valores válidos")
