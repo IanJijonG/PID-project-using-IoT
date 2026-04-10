@@ -24,9 +24,12 @@ intervalSer = 0
 
 ser = None
 
+threads_started = False
+
 QUEUE_MAX = 3000
 DB_BATCH_SIZE = 100
 db_queue = queue.Queue(QUEUE_MAX)
+frontend_queue = queue.Queue(QUEUE_MAX)
 
 
 FQBN = "arduino:avr:uno"
@@ -40,16 +43,26 @@ def Rederizer():
 
 @socketio.on("connect")
 def handle_connect():
-    global ser
-
-    if ser is None or not ser.is_open:
-        ser = serialM.connectionSerial()
-
-        threading.Thread(target=send_data_Fronted, daemon=True).start()
-        threading.Thread(target=DbWorker, daemon=True).start()
-        #threading.Thread(target=WatchDog,daemon=True).start()
-
+    start_background_tasks()
     print("Cliente conectado")
+
+
+def start_background_tasks():
+    global threads_started, ser
+
+    if threads_started:
+        return
+
+    print("Iniciando tareas en background...")
+
+    ser = serialM.connectionSerial()
+
+    socketio.start_background_task(serial_worker)
+    socketio.start_background_task(send_data_Fronted)
+    socketio.start_background_task(DbWorker)
+
+    threads_started = True
+
 @socketio.on("disconnect")
 def handle_disconnect():
     global ser
@@ -96,19 +109,12 @@ def send_data_Fronted():
     last_emit = time.time()
 
     while True:
-        with serial_lock:
-            position,intervalSer = serialM.read_from_serial(ser)
-        
-        if position is not None:
-            try:
-                position = float(position)
-                buffer.append(position)
 
-                if not db_queue.full():
-                    db_queue.put(position)
-
-            except:
-                print("Dato inválido:", position)
+        try:
+            data = frontend_queue.get(timeout=0.1)
+            buffer.append(data)
+        except queue.Empty:
+            pass
 
         if time.time() - last_emit >= 0.1:
             print(buffer)
@@ -118,6 +124,30 @@ def send_data_Fronted():
                 })
                 buffer = []
             last_emit = time.time()
+
+        socketio.sleep(0.01)
+
+def serial_worker():
+    global ser, intervalSer
+
+    while True:
+        with serial_lock:
+            position, intervalSer = serialM.read_from_serial(ser)
+
+        if position is not None:
+            try:
+                position = float(position)
+
+                # Cola para DB
+                if not db_queue.full():
+                    db_queue.put(position)
+
+                # Cola para frontend
+                if not frontend_queue.full():
+                    frontend_queue.put(position)
+
+            except:
+                print("Dato inválido:", position)
 
         socketio.sleep(0.01)
 
@@ -249,5 +279,6 @@ def DbWorker():
 
 
 if __name__ == "__main__":
+
     socketio.run(app, debug=True, use_reloader=False)
 
