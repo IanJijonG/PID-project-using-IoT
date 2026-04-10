@@ -1,8 +1,13 @@
 import serial
 import json
+import threading
+import time 
 
 temporalList = []
 warmUp = 0
+serial_lock = threading.Lock()
+last_valid_time = 0
+
 
 def connectionSerial():
 
@@ -31,36 +36,48 @@ def reconnect_serial(ser):
     else:
         print("Fallo reconexión")
 
+import time
+
 def read_from_serial(ser):
-    global warmUp, temporalList
+    global warmUp, temporalList, last_valid_time
 
     try:
-        if ser.in_waiting > 0:
+        if ser is None or not ser.is_open:
+            return None, None
 
-            position = ser.readline().decode(errors='ignore').strip()
+        if ser.in_waiting <= 0:
+            return None, None
 
-            if not position:
-                return None
+        line = ser.readline().decode(errors='ignore').strip()
 
-            try:
-                temporalList.append(position)
+        if not line:
+            return None, None
 
-                if warmUp < 11:
-                    warmUp += 1
-                    return None
-                else:
-                    return float(position)
+        temporalList.append(line)
 
-            except ValueError:
-                return None
+        try:
+            value = float(line)
+        except ValueError:
+            return None, None
 
-        else:
-            return None
+        # warm-up
+        if warmUp < 11:
+            warmUp += 1
+            return None, None
+
+        now = time.time()
+
+        interval = None
+        if last_valid_time != 0:
+            interval = now - last_valid_time
+
+        last_valid_time = now
+
+        return value, interval
 
     except Exception as e:
         print(f"Error serial: {e}")
-        return None
-
+        return None, None
 """
 def read_from_serial(ser):
     try:
@@ -98,4 +115,3 @@ def writeJsonSerial(ser,data):
 
     except serial.SerialException as e:
         print(f"Error al enviar JSON: {e}")
-    
