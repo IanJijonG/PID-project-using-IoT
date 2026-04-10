@@ -658,6 +658,7 @@ socket.on('data', (msg) => {
         }
 
         socket.emit('code', {
+            cmd:"Code",
             language: language,
             code: code,
             mode: currentMode,
