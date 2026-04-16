@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación del Código</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+        h1, h2, h3 {
+            color: #007bff;
+        }
+        pre {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        code {
+            background-color: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: "Courier New", Courier, monospace;
+        }
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Documentación del Código</h1>
+        <p>
+            Este código implementa una aplicación web utilizando <strong>Flask</strong> y <strong>Flask-SocketIO</strong> 
+            para la comunicación en tiempo real entre el frontend y el backend. Además, se integra con dispositivos Arduino 
+            mediante comunicación serial, bases de datos para almacenamiento de datos, y permite ejecutar comandos CLI.
+        </p>
+        <h2>Estructura General</h2>
+        <h3>Importación de Módulos</h3>
+        <p>El código importa los siguientes módulos:</p>
+        <ul>
+            <li><strong>Flask</strong>: Para crear la aplicación web.</li>
+            <li><strong>Flask-SocketIO</strong>: Para habilitar la comunicación en tiempo real entre el servidor y los clientes.</li>
+            <li><strong>threading</strong>: Para manejar tareas en segundo plano usando hilos.</li>
+            <li><strong>time</strong>: Para gestionar tiempos de espera y calcular intervalos.</li>
+            <li><strong>subprocess</strong>: Para ejecutar comandos en la CLI.</li>
+            <li><strong>queue</strong>: Para manejar colas de datos.</li>
+            <li><strong>SerialManager</strong>: Módulo personalizado para gestionar la comunicación serial con Arduino.</li>
+            <li><strong>DBConnection</strong>: Módulo personalizado para interactuar con la base de datos.</li>
+            <li><strong>CLIworker</strong>: Módulo personalizado para compilar y cargar código en el Arduino.</li>
+        </ul>
+
+        <h3>Variables Globales</h3>
+        <p>El código define las siguientes variables globales:</p>
+        <ul>
+            <li><code>JsonVar</code>: Diccionario que contiene los valores de configuración para el Arduino (PID, setpoint, modo, botón, etc.).</li>
+            <li><code>serial_lock</code>: Lock para evitar conflictos al acceder al puerto serial desde múltiples hilos.</li>
+            <li><code>currentMode</code>: Variable que almacena el modo actual del sistema.</li>
+            <li><code>temporalList</code>: Lista temporal para almacenar datos.</li>
+            <li><code>last_serial_time</code>: Registro del último tiempo de comunicación serial.</li>
+            <li><code>intervalSer</code>: Intervalo de tiempo entre comunicaciones seriales.</li>
+            <li><code>ser</code>: Objeto que representa la conexión serial.</li>
+            <li><code>threads_started</code>: Bandera para evitar iniciar múltiples hilos.</li>
+            <li><code>QUEUE_MAX</code>: Tamaño máximo de las colas de datos.</li>
+            <li><code>DB_BATCH_SIZE</code>: Tamaño del lote para guardar datos en la base de datos.</li>
+            <li><code>db_queue</code>: Cola para almacenar datos antes de enviarlos a la base de datos.</li>
+            <li><code>frontend_queue</code>: Cola para almacenar datos antes de enviarlos al frontend.</li>
+            <li><code>fqbn</code>: Identificador del modelo de Arduino.</li>
+            <li><code>PROYECTO</code>: Nombre del proyecto Arduino.</li>
+        </ul>
+
+        <h2>Rutas y Eventos</h2>
+        <h3>Ruta <code>/</code></h3>
+        <p><strong>Descripción:</strong> Renderiza la página principal de la aplicación web.</p>
+        <pre><code>
+@app.route("/")
+def Rederizer():
+    nombre = "HMI"
+    return render_template("HMIv2.html",nombre=nombre)
+        </code></pre>
+
+        <h3>Evento <code>connect</code></h3>
+        <p><strong>Descripción:</strong> Se ejecuta cuando un cliente se conecta al servidor.</p>
+
+        <h3>Evento <code>disconnect</code></h3>
+        <p><strong>Descripción:</strong> Se ejecuta cuando un cliente se desconecta del servidor.</p>
+
+        <h3>Evento <code>command</code></h3>
+        <p><strong>Descripción:</strong> Maneja los comandos enviados desde el frontend.</p>
+
+        <h2>Funciones Principales</h2>
+        <h3>start_background_tasks()</h3>
+        <p><strong>Descripción:</strong> Inicia los hilos en segundo plano para la ejecución de tareas concurrentes.</p>
+
+        <h3>serial_worker()</h3>
+        <p><strong>Descripción:</strong> Lee datos del puerto serial y los coloca en las colas correspondientes.</p>
+
+        <h3>send_data_Fronted()</h3>
+        <p><strong>Descripción:</strong> Envía datos almacenados en la cola al frontend mediante SocketIO.</p>
+
+        <h3>reconnect_serial()</h3>
+        <p><strong>Descripción:</strong> Reconecta el puerto serial en caso de fallos.</p>
+
+        <h3>WatchDog()</h3>
+        <p><strong>Descripción:</strong> Monitorea el tiempo de respuesta del sistema y reconecta el puerto serial si el tiempo supera el límite definido.</p>
+
+        <h3>commandFilter()</h3>
+        <p><strong>Descripción:</strong> Filtra y ejecuta comandos según su tipo.</p>
+
+        <h3>UpdateJsonArduino()</h3>
+        <p><strong>Descripción:</strong> Envía el diccionario <code>JsonVar</code> al Arduino mediante comunicación serial.</p>
+
+        <h3>DbWorker()</h3>
+        <p><strong>Descripción:</strong> Guarda los datos de posición en la base de datos.</p>
+
+        <h2>Resumen</h2>
+        <p>Este código realiza las siguientes tareas:</p>
+        <ul>
+            <li><strong>Frontend:</strong> Renderiza una interfaz web y gestiona la comunicación en tiempo real con el cliente.</li>
+            <li><strong>Backend:</strong> Procesa comandos y datos enviados por el cliente.</li>
+            <li><strong>Serial:</strong> Maneja la comunicación con dispositivos Arduino.</li>
+            <li><strong>Base de Datos:</strong> Almacena datos de posición en una base de datos.</li>
+            <li><strong>CLI:</strong> Compila y carga código en el Arduino.</li>
+        </ul>
+    </div>
+</body>
+</html>

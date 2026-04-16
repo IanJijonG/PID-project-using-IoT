@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMI Control + Código + Manual (Posición/Velocidad)</title>
+
+    <!-- Socket.io y Chart.js desde CDN -->
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #eef4ff;
+            margin: 0;
+            padding-bottom: 30px;
+        }
+        header {
+            background: #0b3d91;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .container {
+            width: 95%;
+            max-width: 1400px;
+            margin: auto;
+            margin-top: 25px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            transition: 0.2s;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .card h2 {
+            color: #0b3d91;
+            margin-top: 0;
+            border-bottom: 2px solid #e0e7ff;
+            padding-bottom: 10px;
+            font-size: 1.4rem;
+        }
+        label {
+            font-weight: 600;
+            color: #1e293b;
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+        input, textarea, select {
+            padding: 10px 12px;
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font-size: 1rem;
+            transition: 0.2s;
+            background: #f8fafc;
+        }
+        input:focus, textarea:focus, select:focus {
+            border-color: #1e6bff;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(30,107,255,0.2);
+            background: white;
+        }
+        button {
+            background: #1e6bff;
+            color: white;
+            border: none;
+            padding: 12px 22px;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 18px;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        button:hover {
+            background: #0b3d91;
+            transform: scale(1.02);
+        }
+        button.small {
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            margin: 5px;
+            min-width: 100px;
+        }
+        .status {
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 30px;
+            background: #334155;
+            color: white;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .connected {
+            background: #10b981;
+        }
+        .disconnected {
+            background: #ef4444;
+        }
+        .big {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: #0b3d91;
+            text-align: center;
+            background: #e0e7ff;
+            border-radius: 20px;
+            padding: 10px 0;
+            margin: 15px 0;
+            letter-spacing: 2px;
+        }
+        .manual-buttons-simple {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 25px 0 10px;
+        }
+        .btn-start {
+            background: #10b981;
+        }
+        .btn-start:hover {
+            background: #059669;
+        }
+        .btn-stop {
+            background: #ef4444;
+        }
+        .btn-stop:hover {
+            background: #dc2626;
+        }
+        .btn-reset {
+            background: #f59e0b;
+        }
+        .btn-reset:hover {
+            background: #d97706;
+        }
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            justify-content: center;
+        }
+        .mode-btn {
+            flex: 1;
+            margin: 0;
+            padding: 10px;
+            font-size: 0.9rem;
+            background: #64748b;
+        }
+        .mode-btn.active {
+            background: #1e6bff;
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #1e6bff;
+        }
+        .mode-position.active {
+            background: #1e6bff;
+        }
+        .mode-velocity.active {
+            background: #10b981;
+        }
+        textarea {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: #0f172a;
+            color: #a5f3fc;
+            border: 1px solid #2563eb;
+            min-height: 150px;
+            resize: vertical;
+        }
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .chip {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .footer-note {
+            text-align: center;
+            color: #64748b;
+            margin-top: 30px;
+            font-size: 0.9rem;
+        }
+        .double-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width:700px){
+            .double-grid{grid-template-columns:1fr;}
+        }
+        .info-text {
+            text-align: center;
+            color: #475569;
+            margin: 10px 0;
+            font-style: italic;
+        }
+        .mode-indicator {
+            text-align: center;
+            padding: 8px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .mode-position-indicator {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .mode-velocity-indicator {
+            background: #d1fae5;
+            color: #065f46;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1 style="margin:0;">⚙️ HMI Control Simplificado</h1>
+    <div style="margin-top:8px;">
+        Estado conexión:
+        <span id="status" class="status disconnected">DESCONECTADO</span>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- Primera fila: Posición, PID, Manual simple (3 cards) -->
+    <div class="grid">
+
+        <!-- POSICIÓN + SETPOINT con selector de modo -->
+        <div class="card">
+            <h2>📍 Control de Sistema</h2>
+            
+            <!-- Selector de modo POSICIÓN / VELOCIDAD -->
+            <div class="mode-selector">
+                <button id="modePositionBtn" class="mode-btn mode-position active" onclick="setControlMode('position')">
+                    🎯 Modo Posición
+                </button>
+                <button id="modeVelocityBtn" class="mode-btn mode-velocity" onclick="setControlMode('velocity')">
+                    ⚡ Modo Velocidad
+                </button>
+            </div>
+            
+            <!-- Indicador visual del modo actual -->
+            <div id="modeIndicator" class="mode-indicator mode-position-indicator">
+                🎯 Modo POSICIÓN activo
+            </div>
+            
+            <!-- Valor actual según modo -->
+            <div class="big" id="position">0.00</div>
+            <div id="modeValueLabel" style="text-align: center; font-size: 0.8rem; color: #64748b; margin-top: -10px;">
+                Posición actual
+            </div>
+            
+            <!-- Setpoint dinámico -->
+            <label id="setpointLabel" for="setpoint">Setpoint (posición deseada)</label>
+            <input id="setpoint" type="number" step="0.1" value="0.0" placeholder="Ingrese setpoint...">
+            <button onclick="sendSetpoint()">📨 Enviar Setpoint</button>
+        </div>
+
+        <!-- CONTROL PID -->
+        <div class="card">
+            <h2>🎛️ Control PID</h2>
+            <label>Kp (proporcional)</label>
+            <input id="kp" type="number" step="0.01" value="1.0">
+            <label>Ki (integral)</label>
+            <input id="ki" type="number" step="0.01" value="0.1">
+            <label>Kd (derivativo)</label>
+            <input id="kd" type="number" step="0.01" value="0.05">
+            <button onclick="sendPID()">⚡ Actualizar PID</button>
+            <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
+                ℹ️ Los parámetros PID se aplican según el modo seleccionado
+            </p>
+        </div>
+
+        <!-- CONTROL MANUAL SIMPLE (Start / Stop / Reset) -->
+        <div class="card">
+            <h2>🕹️ Control Manual</h2>
+            <p style="text-align:center; color:#1e293b;">Control básico del motor/actuador</p>
+            
+            <div class="manual-buttons-simple">
+                <button class="small btn-start" onclick="sendManualStart()">▶️ START</button>
+                <button class="small btn-stop" onclick="sendManualStop()">⏹️ STOP</button>
+                <button class="small btn-reset" onclick="sendManualReset()">🔄 RESET</button>
+            </div>
+            
+            <p class="info-text">
+                START: inicia movimiento<br>
+                STOP: detiene emergencia<br>
+                RESET: vuelve a posición/velocidad cero
+            </p>
+        </div>
+    </div>
+
+    <!-- SEGUNDA FILA: CÓDIGO Y GRÁFICA en dos columnas -->
+    <div class="double-grid">
+
+        <!-- ENVÍO DE CÓDIGO -->
+        <div class="card">
+            <div class="code-header">
+                <h2>📤 Enviar Código a µC</h2>
+                <span class="chip">.ino / .c / .py</span>
+            </div>
+            <label for="codeLanguage">Lenguaje / plataforma:</label>
+            <select id="codeLanguage">
+                <option value="arduino">Arduino (C++)</option>
+                <option value="micropython">MicroPython</option>
+                <option value="c">C / STM32</option>
+                <option value="other">Otro (texto)</option>
+            </select>
+            <label for="codeArea">Pega tu código aquí:</label>
+            <textarea id="codeArea" placeholder="// Escribe o pega el código para el microcontrolador...">void setup() {
+  pinMode(13, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(13, HIGH);
+  delay(500);
+  digitalWrite(13, LOW);
+  delay(500);
+}</textarea>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button style="flex:2;" onclick="sendCodeToMicro()">📡 Enviar código</button>
+                <button style="flex:1; background:#64748b;" onclick="clearCode()">🗑️ Limpiar</button>
+            </div>
+            <p id="codeFeedback" style="font-size:0.85rem; color:#2563eb; margin:8px 0 0;"></p>
+        </div>
+
+        <!-- GRÁFICA EN TIEMPO REAL -->
+        <div class="card">
+            <h2>📈 Gráfica en Tiempo Real</h2>
+            <canvas id="chart" style="max-height:280px; width:100%;"></canvas>
+            <p style="font-size:0.8rem; color:#334155; text-align:center;">
+                Últimos 50 puntos - <span id="graphModeLabel">Posición</span>
+            </p>
+        </div>
+    </div>
+
+    <!-- Footer opcional -->
+    <div class="footer-note">
+        ⚡ HMI - Modos: Posición (PID posición) | Velocidad (PID velocidad)
+    </div>
+</div>
+
+<script>
+    // ==================== CONFIGURACIÓN INICIAL ====================
+    let currentMode = 'position'; // 'position' o 'velocity'
+    
+    // Conexión Socket.IO
+    const socket = io({
+        transports: ['websocket'],
+    });
+
+    // Referencias DOM
+    const statusSpan = document.getElementById('status');
+    const positionDiv = document.getElementById('position');
+    const modeIndicator = document.getElementById('modeIndicator');
+    const modeValueLabel = document.getElementById('modeValueLabel');
+    const setpointLabel = document.getElementById('setpointLabel');
+    const setpointInput = document.getElementById('setpoint');
+    const graphModeLabel = document.getElementById('graphModeLabel');
+    const modePositionBtn = document.getElementById('modePositionBtn');
+    const modeVelocityBtn = document.getElementById('modeVelocityBtn');
+
+    // ==================== FUNCIÓN PARA CAMBIAR MODO ====================
+    function setControlMode(mode) {
+        if (mode === currentMode) return;
+        
+        currentMode = mode;
+        
+        // Actualizar interfaz según modo
+        if (mode === 'position') {
+            // Cambiar textos y estilos para modo posición
+            modeIndicator.innerHTML = '🎯 Modo POSICIÓN activo';
+            modeIndicator.className = 'mode-indicator mode-position-indicator';
+            setpointLabel.innerHTML = 'Setpoint (posición deseada)';
+            setpointInput.placeholder = 'Ingrese posición deseada (ej: 100)';
+            modeValueLabel.innerHTML = 'Posición actual';
+            graphModeLabel.innerHTML = 'Posición';
+            
+            // Actualizar botones
+            modePositionBtn.classList.add('active');
+            modeVelocityBtn.classList.remove('active');
+            modePositionBtn.style.background = '#1e6bff';
+            modeVelocityBtn.style.background = '#64748b';
+            
+            // Cambiar título del valor grande
+            const positionValue = parseFloat(positionDiv.innerText);
+            positionDiv.style.background = '#e0e7ff';
+            
+        } else {
+            // Cambiar textos y estilos para modo velocidad
+            modeIndicator.innerHTML = '⚡ Modo VELOCIDAD activo';
+            modeIndicator.className = 'mode-indicator mode-velocity-indicator';
+            setpointLabel.innerHTML = 'Setpoint (velocidad deseada)';
+            setpointInput.placeholder = 'Ingrese velocidad deseada (ej: 50)';
+            modeValueLabel.innerHTML = 'Velocidad actual';
+            graphModeLabel.innerHTML = 'Velocidad';
+            
+            // Actualizar botones
+            modeVelocityBtn.classList.add('active');
+            modePositionBtn.classList.remove('active');
+            modeVelocityBtn.style.background = '#10b981';
+            modePositionBtn.style.background = '#64748b';
+            
+            // Cambiar título del valor grande
+            positionDiv.style.background = '#d1fae5';
+        }
+        
+        // Enviar cambio de modo al servidor
+        socket.emit('command', {
+            cmd: 'control_mode',
+            mode: mode,
+            timestamp: Date.now()
+        });
+        
+        console.log(`Modo cambiado a: ${mode}`);
+        
+        // Feedback visual
+        positionDiv.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+            positionDiv.style.transform = 'scale(1)';
+        }, 200);
+    }
+
+    // ==================== INICIALIZAR CHART.JS ====================
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Valor Actual',
+                data: [],
+                borderColor: '#1e6bff',
+                backgroundColor: 'rgba(30,107,255,0.1)',
+                tension: 0.2,
+                pointRadius: 2,
+                fill: false
+            }]
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { 
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Valor'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Muestras'
+                    }
+                }
+            }
+        }
+    });
+
+    // ==================== FUNCIONES DE SOCKET ====================
+    // Actualizar estado conexión
+    socket.on('connect', () => {
+        statusSpan.innerText = 'CONECTADO';
+        statusSpan.className = 'status connected';
+        console.log('Conectado al servidor');
+        
+        // Solicitar modo actual al servidor al conectar
+        socket.emit('command', {
+            cmd: 'get_mode'
+        });
+    });
+
+    socket.on('disconnect', () => {
+        statusSpan.innerText = 'DESCONECTADO';
+        statusSpan.className = 'status disconnected';
+        console.log('Desconectado del servidor');
+    });
+
+    // Recibir datos del servidor (posición o velocidad según modo)
+socket.on('data', (msg) => {
+
+    // 🔹 Caso NUEVO: recibes múltiples datos (buffer)
+    if (msg && msg.positions) {
+
+        msg.positions.forEach((pos) => {
+
+            // actualizar valor grande (solo el último realmente importa)
+            positionDiv.innerText = parseFloat(pos).toFixed(2);
+
+            chart.data.labels.push('');
+            chart.data.datasets[0].data.push(pos);
+
+            // limitar tamaño
+            if (chart.data.labels.length > 50) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+        });
+
+        // 
+        chart.update();
+    }
+
+    // 🔹 Compatibilidad (por si aún llega un solo dato)
+    else if (msg && msg.position !== undefined) {
+
+        const value = parseFloat(msg.position).toFixed(2);
+        positionDiv.innerText = value;
+
+        chart.data.labels.push('');
+        chart.data.datasets[0].data.push(msg.position);
+
+        if (chart.data.labels.length > 50) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+
+        chart.update();
+    }
+});
+    // Recibir confirmación de cambio de modo
+    socket.on('mode_changed', (data) => {
+        console.log('Modo cambiado en servidor:', data);
+        if (data && data.mode && data.mode !== currentMode) {
+            setControlMode(data.mode);
+        }
+    });
+
+    // ==================== FUNCIONES DE CONTROL ====================
+    // Enviar setpoint
+    function sendSetpoint() {
+        const sp = document.getElementById('setpoint').value;
+        if (sp === '' || isNaN(sp)) {
+            alert('Por favor ingrese un valor válido');
+            return;
+        }
+        
+        socket.emit('command', {
+            cmd: 'setpoint',
+            value: parseFloat(sp),
+            mode: currentMode,  // Enviar el modo actual
+            timestamp: Date.now()
+        });
+        
+        console.log(`Setpoint enviado (${currentMode}):`, sp);
+        
+        // Feedback visual
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = '✓ Enviado!';
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 1000);
+    }
+
+    // Enviar PID
+    function sendPID() {
+        const kp = document.getElementById('kp').value;
+        const ki = document.getElementById('ki').value;
+        const kd = document.getElementById('kd').value;
+        
+        if (kp === '' || ki === '' || kd === '') {
+            alert('Complete todos los valores PID');
+            return;
+        }
+        
+        socket.emit('command', {
+            cmd: 'pid',
+            kp: parseFloat(kp),
+            ki: parseFloat(ki),
+            kd: parseFloat(kd),
+            mode: currentMode  // Enviar el modo para aplicar PID específico
+        });
+        
+        console.log('PID enviado para modo:', currentMode);
+        
+        // Feedback visual
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = '✓ PID Actualizado!';
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 1000);
+    }
+
+    // Control manual
+    function sendManualStart() {
+        socket.emit('command', {
+            cmd: 'manual',
+            action: 'start',
+            mode: currentMode
+        });
+        console.log('Comando: START en modo', currentMode);
+        positionDiv.style.backgroundColor = '#d1fae5';
+        setTimeout(() => positionDiv.style.backgroundColor = '', 200);
+    }
+
+    function sendManualStop() {
+        socket.emit('command', {
+            cmd: 'manual',
+            action: 'stop',
+            mode: currentMode
+        });
+        console.log('Comando: STOP');
+        positionDiv.style.backgroundColor = '#fee2e2';
+        setTimeout(() => positionDiv.style.backgroundColor = '', 200);
+    }
+
+    function sendManualReset() {
+        socket.emit('command', {
+            cmd: 'manual',
+            action: 'reset',
+            mode: currentMode
+        });
+        console.log('Comando: RESET en modo', currentMode);
+        positionDiv.style.backgroundColor = '#fed7aa';
+        setTimeout(() => positionDiv.style.backgroundColor = '', 200);
+        
+        // Opcional: resetear setpoint a 0
+        setpointInput.value = '0';
+    }
+
+    // Envío de código
+    function sendCodeToMicro() {
+        const language = document.getElementById('codeLanguage').value;
+        const code = document.getElementById('codeArea').value.trim();
+        const feedback = document.getElementById('codeFeedback');
+
+        if (code === '') {
+            feedback.innerText = '⚠️ El código está vacío.';
+            feedback.style.color = 'red';
+            return;
+        }
+
+        socket.emit('code', {
+            cmd:"Code",
+            language: language,
+            code: code,
+            mode: currentMode,
+            timestamp: Date.now()
+        });
+
+        feedback.innerText = '✅ Código enviado al servidor.';
+        feedback.style.color = '#0b3d91';
+        console.log('Código enviado, lenguaje:', language);
+    }
+
+    function clearCode() {
+        document.getElementById('codeArea').value = '';
+        document.getElementById('codeFeedback').innerText = '';
+    }
+
+    // Recibir ACK del código
+    socket.on('code_ack', (data) => {
+        const feedback = document.getElementById('codeFeedback');
+        if (data && data.success) {
+            feedback.innerText = '✅ µC confirmó recepción de código.';
+            feedback.style.color = 'green';
+        } else {
+            feedback.innerText = '⚠️ Error en recepción del código.';
+            feedback.style.color = 'red';
+        }
+    });
+
+    // Recibir valores PID actuales
+    socket.on('pid_current', (pid) => {
+        if (pid.kp !== undefined) document.getElementById('kp').value = pid.kp;
+        if (pid.ki !== undefined) document.getElementById('ki').value = pid.ki;
+        if (pid.kd !== undefined) document.getElementById('kd').value = pid.kd;
+        if (pid.mode) {
+            console.log('PID actual para modo:', pid.mode);
+        }
+    });
+
+    // ==================== EXPONER FUNCIONES GLOBALMENTE ====================
+    window.setControlMode = setControlMode;
+    window.sendSetpoint = sendSetpoint;
+    window.sendPID = sendPID;
+    window.sendManualStart = sendManualStart;
+    window.sendManualStop = sendManualStop;
+    window.sendManualReset = sendManualReset;
+    window.sendCodeToMicro = sendCodeToMicro;
+    window.clearCode = clearCode;
+
+    console.log('HMI inicializado - Modo por defecto: POSICIÓN');
+</script>
+
+</body>
+</html>
