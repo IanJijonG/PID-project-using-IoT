@@ -16,8 +16,5 @@
             "command": "extension.execute",
             "priority": 4
         }
-
-    ],
-
-    
+    ]
 }
