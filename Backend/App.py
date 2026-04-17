@@ -1,11 +1,12 @@
 from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import threading
-import time
+import time as t
 import subprocess
 import DBConnection as DBConn
 import queue
 import SerialManager as serialM
+import CLIworker as cw
 
 
 
@@ -14,13 +15,15 @@ socketio = SocketIO(app)
 JsonVar = {"kp":1.0, "ki":0.1, "kd": 0.05,"sp":0,"mode":False,"button":2}
 serial_lock = threading.Lock()
 
+arduinoOriginalINO = "name.ino"
+
 currentMode = 0
 
 temporalList = []
 
 last_serial_time = 0
 
-intervalSer = 0
+intervalSer = 0 
 
 ser = None
 
@@ -32,7 +35,7 @@ db_queue = queue.Queue(QUEUE_MAX)
 frontend_queue = queue.Queue(QUEUE_MAX)
 
 
-FQBN = "arduino:avr:uno"
+fqbn = "arduino:avr:uno"
 PROYECTO = "ArduinoCodes"
 
 
@@ -48,18 +51,18 @@ def handle_connect():
 
 
 def start_background_tasks():
-    global threads_started, ser
+    global threads_started, ser, fqbn
 
     if threads_started:
         return
 
-    print("Iniciando tareas en background...")
-
-    ser = serialM.connectionSerial()
-
+    ser,fqbn = serialM.connectionSerial()
+    
+    InitialCodeCharger()
     socketio.start_background_task(serial_worker)
     socketio.start_background_task(send_data_Fronted)
     socketio.start_background_task(DbWorker)
+    socketio.start_background_task(WatchDog)
 
     threads_started = True
 
@@ -106,7 +109,7 @@ def run_commandCLI(cmd):
 def send_data_Fronted():
     global ser, intervalSer
     buffer = []
-    last_emit = time.time()
+    last_emit = t.time()
 
     while True:
 
@@ -116,14 +119,14 @@ def send_data_Fronted():
         except queue.Empty:
             pass
 
-        if time.time() - last_emit >= 0.1:
+        if t.time() - last_emit >= 0.1:
             print(buffer)
             if buffer:
                 socketio.emit("data", {
                     "positions": buffer
                 })
                 buffer = []
-            last_emit = time.time()
+            last_emit = t.time()
 
         socketio.sleep(0.01)
 
@@ -184,7 +187,7 @@ def WatchDog():
     TIMEOUT = 2.0
 
     while True:
-        time.sleep(0.5)
+        socketio.sleep(0.5)
 
         if intervalSer is None:
             continue
@@ -196,7 +199,7 @@ def WatchDog():
             intervalSer = None
 
 def commandFilter(command,action,data):
-    global setpointVar, currentMode
+    global setpointVar, currentMode, fqbn
 
     if command == "manual" and action != "-":
         print("Modo manual activado")
@@ -243,6 +246,33 @@ def commandFilter(command,action,data):
 
 
         UpdateJsonArduino()
+    
+    elif command == "Code":
+        code = data.get("code")
+        port = serialM.detectar_puerto()
+        print(code)
+
+        cw.compile(fqbn,code)
+        socketio.sleep(1)
+        cw.Upload(fqbn,code,port)
+
+def InitialCodeCharger():
+    global arduinoOriginalINO
+
+    try:
+        port, FQBN = serialM.detectar_puerto()
+
+        cw.compile(fqbn,arduinoOriginalINO)
+        t.sleep(0.5)
+        cw.Upload(FQBN,arduinoOriginalINO,port)
+
+        return 1
+    
+    except:
+        return 0
+    
+
+
 
 def UpdateJsonArduino():
     global JsonVar, ser
