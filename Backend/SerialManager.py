@@ -2,6 +2,7 @@ import serial
 import json
 import threading
 import time 
+import subprocess
 
 temporalList = []
 warmUp = 0
@@ -9,12 +10,49 @@ serial_lock = threading.Lock()
 last_valid_time = 0
 
 
+def detectar_puerto():
+    result = subprocess.run(
+        ["arduino-cli", "board", "list", "--format", "json"],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print(result.stderr)
+        return None, None, None
+
+    data = json.loads(result.stdout)
+
+    detected_ports = data.get("detected_ports", [])
+
+    for item in detected_ports:
+        port = item.get("port", {})
+        address = port.get("address")
+
+        # 🔥 placa (board) detectada
+        board = item.get("matching_boards", [{}])[0] if item.get("matching_boards") else {}
+
+        fqbn = board.get("fqbn")
+        name = board.get("name")
+
+        if address:
+            print(f"✅ Puerto detectado: {address}")
+            print(f"📟 Placa detectada: {name}")
+            print(f"⚙️ FQBN: {fqbn}")
+
+            return address, fqbn
+
+    print("🛑 No se encontró ningún dispositivo")
+    return None, None, None
+
 def connectionSerial():
 
+    port,FBQN,  = detectar_puerto()
+
     try:
-        ser = serial.Serial('COM4', 115200)
+        ser = serial.Serial(port, 115200)
         ser.timeout = 0
-        return ser
+        return ser, FBQN
     
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
@@ -78,33 +116,6 @@ def read_from_serial(ser):
     except Exception as e:
         print(f"Error serial: {e}")
         return None, None
-"""
-def read_from_serial(ser):
-    try:
-        while True:
-            # Leer tres líneas consecutivas
-            line1 = ser.readline().decode(errors='ignore').strip()
-            line2 = ser.readline().decode(errors='ignore').strip()
-            line3 = ser.readline().decode(errors='ignore').strip()
-
-            try:
-                val1 = float(line1)
-                val2 = float(line2)
-                val3 = float(line3)
-
-                
-
-                if len(temporalList) < 11:
-                    temporalList.append((val1, val2, val3))
-                else:
-                    print(val1, val2, val3)
-
-            except ValueError:
-                print(f"Datos inválidos: {line1}, {line2}, {line3}")
-
-    except serial.SerialException as e:
-        print(f"Error al abrir el puerto serial: {e}")
-"""""
 
 
 def writeJsonSerial(ser,data):
