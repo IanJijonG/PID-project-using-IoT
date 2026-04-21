@@ -19,8 +19,12 @@ def init_db():
     with get_connection() as conn:
         cursor = conn.cursor()
 
+        cursor.execute("DROP TABLE IF EXISTS measurements;")
+
         for stmt in sql_statements:
             cursor.execute(stmt)
+
+        conn.commit()
 
 def save_position(lote):
     with get_connection() as conn:
@@ -31,4 +35,12 @@ def save_position(lote):
             [(p,) for p in lote]
         )
 
-        conn.commit()  # 👈 asegura escritura inmediata
+        conn.commit()  
+
+def reset_measurements():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM measurements;")
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='measurements';")
+        conn.commit()
+
