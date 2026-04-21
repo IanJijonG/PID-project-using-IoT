@@ -15,14 +15,14 @@ socketio = SocketIO(app)
 JsonVar = {"kp":1.0, "ki":0.1, "kd": 0.05,"sp":0,"mode":False,"button":2}
 serial_lock = threading.Lock()
 
-arduinoOriginalINO = "name.ino"
+arduinoOriginalINO = "Sketches"
 
 currentMode = 0
 
 temporalList = []
 
 last_serial_time = 0
-
+uploadingFlag = 0
 intervalSer = 0 
 
 ser = None
@@ -51,18 +51,23 @@ def handle_connect():
 
 
 def start_background_tasks():
-    global threads_started, ser, fqbn
+    global threads_started, ser, fqbn, uploadingFlag
 
     if threads_started:
         return
 
-    ser,fqbn = serialM.connectionSerial()
-    
-    InitialCodeCharger()
-    socketio.start_background_task(serial_worker)
-    socketio.start_background_task(send_data_Fronted)
-    socketio.start_background_task(DbWorker)
-    socketio.start_background_task(WatchDog)
+    if uploadingFlag == 0:
+        upload_code = InitialCodeCharger()
+        uploadingFlag = 1
+
+
+    if upload_code:
+        t.sleep(1)
+        ser,fqbn = serialM.connectionSerial()
+        socketio.start_background_task(serial_worker)
+        socketio.start_background_task(send_data_Fronted)
+        socketio.start_background_task(DbWorker)
+        socketio.start_background_task(WatchDog)
 
     threads_started = True
 
@@ -120,7 +125,6 @@ def send_data_Fronted():
             pass
 
         if t.time() - last_emit >= 0.1:
-            print(buffer)
             if buffer:
                 socketio.emit("data", {
                     "positions": buffer
@@ -250,7 +254,6 @@ def commandFilter(command,action,data):
     elif command == "Code":
         code = data.get("code")
         port = serialM.detectar_puerto()
-        print(code)
 
         cw.compile(fqbn,code)
         socketio.sleep(1)
@@ -263,13 +266,12 @@ def InitialCodeCharger():
         port, FQBN = serialM.detectar_puerto()
 
         cw.compile(fqbn,arduinoOriginalINO)
-        t.sleep(0.5)
         cw.Upload(FQBN,arduinoOriginalINO,port)
 
-        return 1
+        return True
     
     except:
-        return 0
+        return False
     
 
 
