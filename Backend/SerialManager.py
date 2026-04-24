@@ -29,7 +29,7 @@ def detectar_puerto():
         port = item.get("port", {})
         address = port.get("address")
 
-        # 🔥 placa (board) detectada
+
         board = item.get("matching_boards", [{}])[0] if item.get("matching_boards") else {}
 
         fqbn = board.get("fqbn")
