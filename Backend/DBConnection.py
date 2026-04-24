@@ -44,3 +44,28 @@ def reset_measurements():
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='measurements';")
         conn.commit()
 
+def get_data():
+    data = []
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        SELECT id, position, timestamp
+        FROM measurements
+        ORDER BY timestamp 
+    """
+        )
+    
+        rows = cursor.fetchall()
+
+    
+    for row in rows:
+        data.append({
+            "id": row[0],
+            "position": row[1],
+            "timestamp": row[2]
+        })
+
+
+    return data
+
