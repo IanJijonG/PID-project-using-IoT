@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMI Control + Código + Manual (Posición/Velocidad)</title>
+
+    <!-- Socket.io y Chart.js -->
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- CSS externo -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+<header>
+    <h1 style="margin:0;">⚙️ HMI-Control de motor</h1>
+    <div style="margin-top:8px;">
+        Estado conexión:
+        <span id="status" class="status disconnected">DESCONECTADO</span>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- PRIMERA FILA -->
+    <div class="grid">
+
+        <!-- CONTROL -->
+        <div class="card">
+            <h2>📍 Control de Sistema</h2>
+
+            <div class="mode-selector">
+                <button id="modePositionBtn" class="mode-btn mode-position active" onclick="setControlMode('position')">
+                    🎯 Modo Posición
+                </button>
+                <button id="modeVelocityBtn" class="mode-btn mode-velocity" onclick="setControlMode('velocity')">
+                    ⚡ Modo Velocidad
+                </button>
+            </div>
+
+            <div id="modeIndicator" class="mode-indicator mode-position-indicator">
+                🎯 Modo POSICIÓN activo
+            </div>
+
+            <div class="big" id="position">0.00</div>
+
+            <div id="modeValueLabel" style="text-align:center; font-size:0.8rem; color:#64748b; margin-top:-10px;">
+                Posición actual
+            </div>
+
+            <label id="setpointLabel" for="setpoint">Setpoint (posición deseada)</label>
+            <input id="setpoint" type="number" step="0.1" value="0.0" placeholder="Ingrese setpoint...">
+            <button onclick="sendSetpoint()">📨 Enviar Setpoint</button>
+        </div>
+
+        <!-- PID -->
+        <div class="card">
+            <h2>🎛️ Control PID</h2>
+
+            <label>Kp (proporcional)</label>
+            <input id="kp" type="number" step="0.01" value="1.0">
+
+            <label>Ki (integral)</label>
+            <input id="ki" type="number" step="0.01" value="0.1">
+
+            <label>Kd (derivativo)</label>
+            <input id="kd" type="number" step="0.01" value="0.05">
+
+            <button onclick="sendPID()">⚡ Actualizar PID</button>
+
+            <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
+                ℹ️ Los parámetros PID se aplican según el modo seleccionado
+            </p>
+        </div>
+
+        <!-- MANUAL -->
+        <div class="card">
+            <h2>🕹️ Control Manual</h2>
+
+            <p style="text-align:center; color:#1e293b;">
+                Control básico del motor/actuador
+            </p>
+
+            <div class="manual-buttons-simple">
+                <button class="small btn-start" onclick="sendManualStart()">▶️ START</button>
+                <button class="small btn-stop" onclick="sendManualStop()">⏹️ STOP</button>
+                <button class="small btn-reset" onclick="sendManualReset()">🔄 RESET</button>
+            </div>
+
+            <p class="info-text">
+                START: inicia movimiento<br>
+                STOP: detiene emergencia<br>
+                RESET: vuelve a posición/velocidad cero
+            </p>
+        </div>
+    </div>
+
+    <!-- SEGUNDA FILA -->
+    <div class="double-grid">
+
+        <!-- CÓDIGO -->
+        <div class="card">
+            <div class="code-header">
+                <h2>📤 Enviar Código a µC</h2>
+                <span class="chip">.ino / .c / .py</span>
+            </div>
+
+            <label for="codeLanguage">Lenguaje / plataforma:</label>
+            <select id="codeLanguage">
+                <option value="arduino">Arduino (C++)</option>
+                <option value="micropython">MicroPython</option>
+                <option value="c">C / STM32</option>
+                <option value="other">Otro (texto)</option>
+            </select>
+
+            <label for="codeArea">Pega tu código aquí:</label>
+            <textarea id="codeArea" placeholder="// Escribe o pega el código...">void setup() {
+  pinMode(13, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(13, HIGH);
+  delay(500);
+  digitalWrite(13, LOW);
+  delay(500);
+}</textarea>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button style="flex:2;" onclick="sendCodeToMicro()">📡 Enviar código</button>
+                <button style="flex:1; background:#64748b;" onclick="clearCode()">🗑️ Limpiar</button>
+            </div>
+
+            <p id="codeFeedback" style="font-size:0.85rem; color:#2563eb; margin-top:8px;"></p>
+        </div>
+
+        <!-- GRÁFICA -->
+        <div class="card">
+            <h2>📈 Gráfica en Tiempo Real</h2>
+
+            <canvas id="chart" style="max-height:280px; width:100%;"></canvas>
+
+            <div style="text-align:center; margin-top:10px;">
+                <button onclick="downloadCSV()">💾 Descargar CSV</button>
+            </div>
+
+            <p style="font-size:0.8rem; color:#334155; text-align:center;">
+                <span id="graphModeLabel"></span>
+            </p>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer-note">
+        HMI : Posición (PID posición) | Velocidad (PID velocidad)
+    </div>
+
+</div>
+
+<!-- JS externo -->
+<script src="app.js"></script>
+
+</body>
+</html>
