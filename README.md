@@ -1,5 +1,5 @@
-Sistema de Control PID basado en IoT
-Descripción
+#Sistema de Control PID basado en IoT
+##Descripción
 
 Este proyecto implementa un sistema de control PID utilizando una arquitectura IoT basada en ESP32 y Raspberry Pi, permitiendo monitoreo y control en tiempo real mediante comunicación en red.
 
