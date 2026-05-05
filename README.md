@@ -21,7 +21,7 @@ Validate system performance through dynamic response analysis
         |  (Processing / UI)   |
         +----------+-----------+
                    |
-                Sockets
+                 Serial
                    |
         +----------v-----------+
         |        ESP32         |
@@ -45,7 +45,6 @@ Remote parameter adjustment
 ### Software
 Python
 C/C++ (ESP32 / Arduino framework)
-TCP/IP Socket Programming
 
 ### Hardware
 ESP32
@@ -57,7 +56,7 @@ Sensors & actuators (motor and encoder)
 - 2.Error is computed against the desired setpoint
 - 3.PID control law is applied
 - 4.Control signal is sent to the actuator
-- 5.Data is transmitted to Raspberry Pi via sockets
+- 5.Data is transmitted to Raspberry Pi
 - 6.User can monitor and adjust parameters remotely
 
 ## Potential Improvements
