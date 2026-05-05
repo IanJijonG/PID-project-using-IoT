@@ -53,12 +53,12 @@ Raspberry Pi 4
 Sensors & actuators (motor and encoder)
 
 ## System Workflow
-1.Sensor data is acquired by the ESP32
-2.Error is computed against the desired setpoint
-3.PID control law is applied
-4.Control signal is sent to the actuator
-5.Data is transmitted to Raspberry Pi via sockets
-6.User can monitor and adjust parameters remotely
+- 1.Sensor data is acquired by the ESP32
+- 2.Error is computed against the desired setpoint
+- 3.PID control law is applied
+- 4.Control signal is sent to the actuator
+- 5.Data is transmitted to Raspberry Pi via sockets
+- 6.User can monitor and adjust parameters remotely
 
 ## Potential Improvements
 Integration with MQTT for scalable IoT communication
