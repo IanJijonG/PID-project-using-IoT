@@ -9,7 +9,7 @@ import SerialManager as serialM
 import CLIworker as cw
 import io
 import csv
-import datetime
+from datetime import datetime
 
 
 app = Flask(__name__)
@@ -58,7 +58,7 @@ def Rederizer():
     """
 
     nombre = "HMI"
-    return render_template("HMIv2.html",nombre=nombre)
+    return render_template("index.html",nombre=nombre)
 
 @socketio.on("connect")
 def handle_connect():
@@ -120,10 +120,10 @@ def export_csv():
     output = io.StringIO()
     writer = csv.writer(output)
 
-    writer.writerow(['id','var','timestamp'])
+    writer.writerow(['id','polition','timestamp'])
 
     for i in data:
-        writer.writerow([i["id"], i["var"], i["timestamp"]])
+        writer.writerow([i["id"], i["position"], i["timestamp"]])
     
     output.seek(0)
 
@@ -177,6 +177,7 @@ def start_background_tasks():
 
 
     if upload_code:
+        print("Conectando tareas...")
         t.sleep(1)
         ser,fqbn = serialM.connectionSerial()
         socketio.start_background_task(serial_worker)

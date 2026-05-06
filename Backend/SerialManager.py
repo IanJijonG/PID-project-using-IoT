@@ -47,12 +47,11 @@ def detectar_puerto():
 
 def connectionSerial():
 
-    port,FBQN,  = detectar_puerto()
 
     try:
-        ser = serial.Serial(port, 115200)
+        ser = serial.Serial("/dev/ttyUSB0" , 115200)
         ser.timeout = 0
-        return ser, FBQN
+        return ser
     
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
