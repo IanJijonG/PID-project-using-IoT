@@ -10,43 +10,8 @@ serial_lock = threading.Lock()
 last_valid_time = 0
 
 
-def detectar_puerto():
-    result = subprocess.run(
-        ["arduino-cli", "board", "list", "--format", "json"],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
-        print(result.stderr)
-        return None, None, None
-
-    data = json.loads(result.stdout)
-
-    detected_ports = data.get("detected_ports", [])
-
-    for item in detected_ports:
-        port = item.get("port", {})
-        address = port.get("address")
-
-
-        board = item.get("matching_boards", [{}])[0] if item.get("matching_boards") else {}
-
-        fqbn = board.get("fqbn")
-        name = board.get("name")
-
-        if address:
-            print(f"✅ Puerto detectado: {address}")
-            print(f"📟 Placa detectada: {name}")
-            print(f"⚙️ FQBN: {fqbn}")
-
-            return address, fqbn
-
-    print("🛑 No se encontró ningún dispositivo")
-    return None, None, None
 
 def connectionSerial():
-
 
     try:
         ser = serial.Serial("/dev/ttyUSB0" , 115200)

@@ -6,7 +6,6 @@ import subprocess
 import DBConnection as DBConn
 import queue
 import SerialManager as serialM
-import CLIworker as cw
 import io
 import csv
 from datetime import datetime
@@ -58,7 +57,7 @@ def Rederizer():
     """
 
     nombre = "HMI"
-    return render_template("index.html",nombre=nombre)
+    return render_template("HMIv2.html",nombre=nombre)
 
 @socketio.on("connect")
 def handle_connect():
@@ -171,19 +170,17 @@ def start_background_tasks():
     if threads_started:
         return True
 
-    if uploadingFlag == 0:
-        upload_code = Initial_code_charger()
-        uploadingFlag = 1
 
 
-    if upload_code:
-        print("Conectando tareas...")
-        t.sleep(1)
-        ser,fqbn = serialM.connectionSerial()
-        socketio.start_background_task(serial_worker)
-        socketio.start_background_task(send_data_Fronted)
-        socketio.start_background_task(Db_worker)
-        socketio.start_background_task(WatchDog)
+   
+    print("Conectando tareas...")
+    t.sleep(1)
+    ser= serialM.connectionSerial()
+
+    socketio.start_background_task(serial_worker)
+    socketio.start_background_task(send_data_Fronted)
+    socketio.start_background_task(Db_worker)
+    socketio.start_background_task(WatchDog)
 
     threads_started = True
 
@@ -583,27 +580,9 @@ def command_filter(command,action,data):
         Update_json_arduino()
     
     elif command == "Code":
-        code = data.get("code")
-        port = serialM.detectar_puerto()
-
-        cw.compile(fqbn,code)
-        socketio.sleep(1)
-        cw.Upload(fqbn,code,port)
-
-def Initial_code_charger():
-    global arduinoOriginalINO
-
-    try:
-        port, FQBN = serialM.detectar_puerto()
-
-        cw.compile(fqbn,arduinoOriginalINO)
-        cw.Upload(FQBN,arduinoOriginalINO,port)
-
+        
         return True
-    
-    except:
-        return False
-    
+
 
 def Update_json_arduino():
     """
