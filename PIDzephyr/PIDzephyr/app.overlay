@@ -1,0 +1,39 @@
+#include <zephyr/dt-bindings/pinctrl/esp32-pinctrl.h>
+
+/ {
+    aliases {
+        pwm-led0 = &motor_pwm;
+    };
+
+    pwmleds {
+        compatible = "pwm-leds";
+        motor_pwm: motor_pwm {
+            pwms = <&ledc0 0 100000 PWM_POLARITY_NORMAL>;
+        };
+    };
+};
+
+&pinctrl {
+    ledc0_default: ledc0_default {
+        group1 {
+            /* Cambia GPIO25 al pin que usa tu motor */
+            pinmux = <LEDC_CH0_GPIO25>;
+            output-enable;
+        };
+    };
+};
+
+&ledc0 {
+    status = "okay";
+    pinctrl-0 = <&ledc0_default>;
+    pinctrl-names = "default";
+
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    /* ← Esto es lo que faltaba */
+    channel0@0 {
+        reg = <0x0>;
+        timer = <0>;
+    };
+};
