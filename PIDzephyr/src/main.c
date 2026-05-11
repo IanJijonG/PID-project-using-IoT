@@ -8,6 +8,7 @@
 #include <zephyr/drivers/uart.h>
 #include <stdint.h>
 #include <math.h>
+#include <stdlib.h>   // ← para atof()
 
 // Pines
 #define IN1 19 
@@ -17,7 +18,6 @@
 #define ENCODER_B 27
 #define PIN_SENSOR 4
 
-#define UART_BUF_SIZE 128
 
 // Alias para el PWM
 #define PWM_NODE DT_ALIAS(pwm_led0)
@@ -25,7 +25,7 @@ static const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(PWM_NODE);
 
 // Variables
 atomic_t theta = ATOMIC_INIT(0);
-K_MUTEX_DEFINE(pid_mutex);
+K_MUTEX_DEFINE(pid_mutex); // Mutex para proteger acceso a Kp, Ki, Kd, sp, mode y button
 int32_t sp = 30;
 
 float pv = 0.0;
@@ -66,22 +66,29 @@ struct k_thread sensor_thread;
 
 // Json
 struct pid_config {
-    double kp;
-    double ki;
-    double kd;
-    double sp;
+    const char *kp;
+    const char *ki;
+    const char *kd;
+    const char *sp;
     int mode;
     int button;
 };
 
 static const struct json_obj_descr pid_descr[] = {
-    JSON_OBJ_DESCR_PRIM(struct pid_config, kp, JSON_TOK_NUMBER),
-    JSON_OBJ_DESCR_PRIM(struct pid_config, ki, JSON_TOK_NUMBER),
-    JSON_OBJ_DESCR_PRIM(struct pid_config, kd, JSON_TOK_NUMBER),
-    JSON_OBJ_DESCR_PRIM(struct pid_config, sp, JSON_TOK_NUMBER),
+    JSON_OBJ_DESCR_PRIM(struct pid_config, kp, JSON_TOK_STRING),
+    JSON_OBJ_DESCR_PRIM(struct pid_config, ki, JSON_TOK_STRING),
+    JSON_OBJ_DESCR_PRIM(struct pid_config, kd, JSON_TOK_STRING),
+    JSON_OBJ_DESCR_PRIM(struct pid_config, sp, JSON_TOK_STRING),
     JSON_OBJ_DESCR_PRIM(struct pid_config, mode, JSON_TOK_NUMBER),
     JSON_OBJ_DESCR_PRIM(struct pid_config, button, JSON_TOK_NUMBER),
 };
+
+#define UART_BUF_SIZE 128
+
+static char uart_buf[UART_BUF_SIZE];
+static int uart_idx = 0;
+static volatile bool json_ready = false;
+static char json_buffer[UART_BUF_SIZE];
 
 // ================= ENCODER =================
 static struct gpio_callback cb_encoderA;
@@ -113,6 +120,32 @@ void encoder_isrB(const struct device *dev, struct gpio_callback *cb, uint32_t p
     }
 }
 
+//Callback de UART para recibir datos
+void uart_cb(const struct device *dev, void *user_data)
+{
+    if (!uart_irq_update(dev)) return;
+    if (!uart_irq_rx_ready(dev)) return;
+
+    uint8_t c;
+    while (uart_fifo_read(dev, &c, 1) == 1) {
+        if (c == '\n' || c == '\r') {
+            uart_buf[uart_idx] = '\0';
+
+            if (uart_idx > 0 && uart_buf[0] == '{') {
+                memcpy(json_buffer, uart_buf, uart_idx + 1);
+                json_ready = true;
+            }
+            uart_idx = 0;
+        } else {
+            if (uart_idx < UART_BUF_SIZE - 1) {
+                uart_buf[uart_idx++] = c;
+            } else {
+                uart_idx = 0; // overflow
+            }
+        }
+    }
+}
+
 //Deserialización JSON
 void deserializar_json(char *json)
 {
@@ -127,21 +160,24 @@ void deserializar_json(char *json)
     );
 
     if (ret < 0) {
-        printk("Error al parsear JSON: %d\n", ret);
+        /*printk("Error al parsear JSON: %d\n", ret);*/
         return;
     }
 
     // 🔒 PROTEGER ESCRITURA
     k_mutex_lock(&pid_mutex, K_FOREVER);
 
-    Kp = cfg.kp;
-    Ki = cfg.ki;
-    Kd = cfg.kd;
-    sp = (int32_t)cfg.sp;
+    Kp = atof(cfg.kp);
+    Ki = atof(cfg.ki);
+    Kd = atof(cfg.kd);
+    sp = (int32_t)atof(cfg.sp);
     mode = cfg.mode;
     button = cfg.button;
 
     k_mutex_unlock(&pid_mutex);
+
+    /*printk("JSON OK - Kp:%.2f Ki:%.2f Kd:%.2f sp:%d mode:%d button:%d\n",
+           (double)Kp, (double)Ki, (double)Kd, sp, mode, button);*/
 }
 
 // 🔵 Prioridad 1 → PID
@@ -231,22 +267,36 @@ void PID_thread(void *a, void *b, void *c)
                     gpio_pin_set(gpio_dev, IN2, 0);
                     cv = 0;
                     //cv1 = 0;
-                } 
+                }
+                //Dirección
+                else {
+                    pwm_set_dt(&pwm_led, period, pulse);
+
+                    if (cv > 0) {
+                        gpio_pin_set(gpio_dev, IN1, 0);
+                        gpio_pin_set(gpio_dev, IN2, 1);
+                    }
+                    else if (cv < 0) {
+                        gpio_pin_set(gpio_dev, IN1, 1);
+                        gpio_pin_set(gpio_dev, IN2, 0);
+                    }
+                }
             }
-            //Dirección
-            else {
+
+            else { 
                 pwm_set_dt(&pwm_led, period, pulse);
 
                 if (cv > 0) {
                     gpio_pin_set(gpio_dev, IN1, 0);
                     gpio_pin_set(gpio_dev, IN2, 1);
-                } 
+                }
                 else if (cv < 0) {
                     gpio_pin_set(gpio_dev, IN1, 1);
                     gpio_pin_set(gpio_dev, IN2, 0);
-                }
+                }    
             }
         }
+        
         else if (button_local == 2) { // Stop
             pwm_set_dt(&pwm_led, period, 0);
             gpio_pin_set(gpio_dev, IN1, 0);
@@ -282,36 +332,18 @@ void PID_thread(void *a, void *b, void *c)
 // 🔵 Prioridad 2 → Comunicación JSON 
 void COMjson_thread(void *a, void *b, void *c)
 {
-    //int64_t next = k_uptime_get();
-
     const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
-    static char buffer[UART_BUF_SIZE];  //Guarda el JSON recibido
-    int idx = 0;                        //Posición que va leyendo
 
-    while(1){
+    // Configura el callback y habilita interrupciones RX
+    uart_irq_callback_set(uart, uart_cb);
+    uart_irq_rx_enable(uart);
 
-        uint8_t c;
-        if (uart_poll_in(uart, &c) == 0){        //Devuelve 0 si se leyó un byte
-
-            if (c == '\n' || c == '\r'){            //Detectar fin de mensaje
-                buffer[idx] = '\0';                 //Termina el string
-
-                if (idx > 0 && buffer[0] == '{') {
-                    deserializar_json(buffer);           //Parsea el JSON
-                }
-                idx = 0;                            //Reinicia índice para próximo mensaje
-            }
-                            
-            else {
-                if (idx < UART_BUF_SIZE - 1) {     //Evita overflow
-                buffer[idx++] = c;                  //Agrega byte al buffer
-                } 
-                else { 
-                    idx = 0; // overflow 
-                }
-            }
-        }           
-    k_sleep(K_MSEC(200));
+    while (1) {
+        if (json_ready) {
+            json_ready = false;
+            deserializar_json(json_buffer);
+        }
+        k_sleep(K_MSEC(10));
     }
 }
 
@@ -366,10 +398,13 @@ int main(void)
                     PRIORITY2, 0, K_NO_WAIT);
 
     // Debug
-    while(1){
+    while(1) {
+
+    printk("%.2f\n", pv);
+
     k_sleep(K_MSEC(500));
-    printk("SP: %d CV: %.2f PV: %.2f\n", sp, (double)cv, (double)pv);
     }
+
     return 0;
 }
 
