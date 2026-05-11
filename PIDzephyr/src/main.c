@@ -160,7 +160,7 @@ void deserializar_json(char *json)
     );
 
     if (ret < 0) {
-        /*printk("Error al parsear JSON: %d\n", ret);*/
+        //printk("Error al parsear JSON: %d\n", ret);
         return;
     }
 
@@ -176,8 +176,8 @@ void deserializar_json(char *json)
 
     k_mutex_unlock(&pid_mutex);
 
-    /*printk("JSON OK - Kp:%.2f Ki:%.2f Kd:%.2f sp:%d mode:%d button:%d\n",
-           (double)Kp, (double)Ki, (double)Kd, sp, mode, button);*/
+    //printk("JSON OK - Kp:%.2f Ki:%.2f Kd:%.2f sp:%d mode:%d button:%d\n",
+           //(double)Kp, (double)Ki, (double)Kd, sp, mode, button);
 }
 
 // 🔵 Prioridad 1 → PID
@@ -398,9 +398,26 @@ int main(void)
                     PRIORITY2, 0, K_NO_WAIT);
 
     // Debug
+
+        float kp, ki, kd;
+        int32_t sp_local;
+        int mode_local, button_local;
+
     while(1) {
 
+        k_mutex_lock(&pid_mutex, K_FOREVER);
+
+        kp = Kp;
+        ki = Ki;
+        kd = Kd;
+        mode_local = mode;
+        button_local = button;
+        sp_local = sp;
+
+        k_mutex_unlock(&pid_mutex);
+
     printk("%.2f\n", pv);
+
 
     k_sleep(K_MSEC(500));
     }
