@@ -1,0 +1,8 @@
+name: MCE_G26_IAN
+description: ""
+ports: []
+bricks:
+- arduino:dbstorage_sqlstore: {}
+- arduino:web_ui: {}
+- arduino:dbstorage_tsstore: {}
+icon: 😀
