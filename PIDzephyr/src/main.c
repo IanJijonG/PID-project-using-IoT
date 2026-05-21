@@ -210,7 +210,7 @@ void PID_thread(void *a, void *b, void *c)
         int32_t theta_cnt = atomic_get(&theta);
 
         if (mode_local == 1) { // Velocidad
-            pv = theta_cnt * 2.416; //Conversión de ppr a RPM}
+            pv = theta_cnt * 1.208f; //Conversión de ppr a RPM}
         }
         else { // Posición
             pv = theta_cnt * (360.0f / 2483.0f);
