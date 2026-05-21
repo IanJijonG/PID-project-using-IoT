@@ -123,7 +123,7 @@ void encoder_isrB(const struct device *dev, struct gpio_callback *cb, uint32_t p
 //Callback de UART para recibir datos
 void uart_cb(const struct device *dev, void *user_data)
 {
-    if (!uart_irq_update(dev)) return;
+    uart_irq_update(dev);
     if (!uart_irq_rx_ready(dev)) return;
 
     uint8_t c;
