@@ -3,10 +3,10 @@
 //Inicialización de Variables
 
 volatile int theta = 0; //Variable volatil de la interrupción del sensor
-float setpoint=0;         //valor del SetPoint
+float setpoint=0;       //valor del SetPoint
 int caso;               //variable de los casos para modificar ganancias
-bool mode;              //Bandera de modo (velocidad/posición) 
-int button = 1 ;             //Botones de restart, start y stop {0, 1 y 2}
+bool mode;              //Bandera de modo Posicion=0 Velocidad=1
+int button = 1 ;        //Botones  0=Restart 1=Start 2=Stop
 bool FC = true;         //Sensor para el reset de la posición del motor
 
 #define IN1 33          //Pines del puente H
