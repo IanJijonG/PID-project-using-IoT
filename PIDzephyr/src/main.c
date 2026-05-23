@@ -26,14 +26,14 @@ static const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(PWM_NODE);
 // Variables
 atomic_t theta = ATOMIC_INIT(0);
 K_MUTEX_DEFINE(pid_mutex); // Mutex para proteger acceso a Kp, Ki, Kd, sp, mode y button
-int32_t sp = 30;
+int32_t sp = 0;
 
 float pv = 0.0;
 float cv = 0.0, cv1 = 0.0;
 float error = 0.0, error1 = 0.0, error2 = 0.0;
 
-float Kp = 2.0;
-float Ki = 3.0;
+float Kp = 0.0;
+float Ki = 0.0;
 float Kd = 0.0;
 
 int mode = 0;   // 1: Velocidad, 0: Posición
