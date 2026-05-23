@@ -232,7 +232,7 @@ void velocidad(){
 }
 
 void posicion(){
-  pv = theta * (360.0 / 2483.0); //ángulo del eje principal
+  pv = theta * (360.0 / 2483.0); //conversión de ppr a ángulo del eje principal
 }
 
 void deserializarJSON(const char* json) {
