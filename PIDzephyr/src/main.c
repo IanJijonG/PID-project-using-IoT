@@ -37,7 +37,7 @@ float Ki = 0.0;
 float Kd = 0.0;
 
 int mode = 0;   // 1: Velocidad, 0: Posición
-int button = 0; // 0: Restart, 1: Start, 2: Stop
+int button = 2; // 0: Restart, 1: Start, 2: Stop
 
 //Tiempo de muestreo
 #define Tm_ms 5
