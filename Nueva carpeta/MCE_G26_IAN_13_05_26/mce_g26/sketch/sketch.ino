@@ -1,13 +1,12 @@
 #include "Arduino_RouterBridge.h"
 #include <zephyr/kernel.h>   // k_thread, k_mutex, k_sleep, atomic_t
 
-// Pines
-#define IN1        9
-#define IN2        8
-#define PWM_PIN    10
-#define ENCODER_A  6
-#define ENCODER_B  7
-#define PIN_SENSOR  4
+// Pines   //Pin 9 reservado para timer zephyr
+#define PWM_PIN_der    10
+#define PWM_PIN_izq    11
+#define ENCODER_A  7
+#define ENCODER_B  6
+#define PIN_SENSOR 5
 
 // Tiempo de muestreo
 #define Tm_ms  5
@@ -20,12 +19,12 @@ atomic_t theta = ATOMIC_INIT(0);
 K_MUTEX_DEFINE(pid_mutex);
 
 // Variables del PID (protegidas por mutex)
-float Kp     = 2.0f;
-float Ki     = 3.0f;
+float Kp     = 0.0f;
+float Ki     = 0.0f;
 float Kd     = 0.0f;
-float sp     = 30.0f;
+float sp     = 0.0f;
 int   mode   = 0;    // 0 = Posición, 1 = Velocidad
-int   button = 1;    // 0 = Restart, 1 = Start, 2 = Stop
+int   button = 2;    // 0 = Restart, 1 = Start, 2 = Stop
 
 // Variables internas del PID (solo usa PID_thread)
 static float pv     = 0.0f;
@@ -68,6 +67,8 @@ void interrupcion2() {
 void resetPID() {
     cv = cv1 = 0.0f;
     error_pid = error1 = error2 = 0.0f;
+    sp = 0;
+    atomic_set(&theta, 0);
 }
 
 // ─────────────────────────────────────────────
@@ -96,9 +97,12 @@ void PID_thread(void *a, void *b, void *c) {
         int32_t cnt = atomic_get(&theta);
 
         if (mode_local == 1) {          // Velocidad
-            pv = cnt * 2.416f;      // PPR → RPM
-        } else {                    // Posición
-            pv = cnt * (360.0f / 2483.0f);
+          //pv = cnt * 1.208f;   //Motor grande corregido
+          pv = cnt *  6.07287f;   //Motor chico
+        } 
+        else {                    // Posición
+            //pv = cnt * (360.0f / 2483.0f); //Motor grande
+            pv = cnt * (360.0f / 1976.0f); //Motor chico
         }
 
         // ── Error ──
@@ -116,11 +120,12 @@ void PID_thread(void *a, void *b, void *c) {
         if (cv_sat < -500.0f) cv_sat = -500.0f;
 
         // ── Anti-windup back-calculation ──
-        const float k_aw = 0.05f;
-        cv1 = cv_sat + k_aw * (cv_sat - cv);
+        /*const float k_aw = 0.05f;
+        cv1 = cv_sat + k_aw * (cv_sat - cv);*/
         cv  = cv_sat;
 
         // ── Actualizar historial ──
+        cv1 = cv;
         error2 = error1;
         error1 = error_pid;
 
@@ -139,45 +144,40 @@ void PID_thread(void *a, void *b, void *c) {
             if (mode_local == 0) {      // Posición
                 if (fabsf(error_pid) < 1.0f) {
                     // Dentro de banda muerta → detener
-                    analogWrite(PWM_PIN, 0);
-                    digitalWrite(IN1, LOW);
-                    digitalWrite(IN2, LOW);
+                    analogWrite(PWM_PIN_der, 0);
+                    analogWrite(PWM_PIN_izq, 0);
                     cv = 0.0f;
                 } 
                 else {
-                    analogWrite(PWM_PIN, pwm_val);
                     if (cv > 0) {
-                        digitalWrite(IN1, LOW);
-                        digitalWrite(IN2, HIGH);
+                      analogWrite(PWM_PIN_der, pwm_val);
+                      analogWrite(PWM_PIN_izq, 0);
                     } 
                     else {
-                        digitalWrite(IN1, HIGH);
-                        digitalWrite(IN2, LOW);
+                      analogWrite(PWM_PIN_der, 0);
+                      analogWrite(PWM_PIN_izq, pwm_val);
                     }
                 }
             } 
-            else {                // Velocidad
-                analogWrite(PWM_PIN, pwm_val);
+            else {                       // Velocidad
                 if (cv > 0) {
-                    digitalWrite(IN1, LOW);
-                    digitalWrite(IN2, HIGH);
+                  analogWrite(PWM_PIN_der, pwm_val);
+                  analogWrite(PWM_PIN_izq, 0);
                 } 
                 else {
-                    digitalWrite(IN1, HIGH);
-                    digitalWrite(IN2, LOW);
+                  analogWrite(PWM_PIN_der, 0);
+                  analogWrite(PWM_PIN_izq, pwm_val);
                 }
             }
         }
         else if (button_local == 2) {   // STOP
-            analogWrite(PWM_PIN, 0);
-            digitalWrite(IN1, LOW);
-            digitalWrite(IN2, LOW);
+            analogWrite(PWM_PIN_der, 0);
+            analogWrite(PWM_PIN_izq, 0);
             cv = 0.0f; cv1 = 0.0f;
         }
         else if (button_local == 0) {   // RESTART — avanza hasta sensor
-            analogWrite(PWM_PIN, 96);   // ~38% duty (≈50/130 del .ino original)AJUSTAR
-            digitalWrite(IN1, HIGH);
-            digitalWrite(IN2, LOW);
+            analogWrite(PWM_PIN_der, 64);   // ~25% duty
+            analogWrite(PWM_PIN_izq, 0);
             resetPID();
         }
 
@@ -297,9 +297,8 @@ void setup() {
     Monitor.begin(9600);
   
   // Pines de dirección
-    pinMode(IN1,      OUTPUT);
-    pinMode(IN2,      OUTPUT);
-    pinMode(PWM_PIN,  OUTPUT);
+    pinMode(PWM_PIN_der,  OUTPUT);
+    pinMode(PWM_PIN_izq,  OUTPUT);
 
     // Pines encoder con pull-up (filtra ruido eléctrico)
     pinMode(ENCODER_A, INPUT_PULLUP);
@@ -340,14 +339,12 @@ void loop() {
     Bridge.notify("get_pv", set_pv(pv));
     printMonitor("cv=", cv);
     printMonitor("pv=", pv);
+    printMonitor("pulsos=", theta);
     
-    char buf[16];
+    char buf[16];                   //Imprime valor del button
     snprintf(buf, sizeof(buf), "btn=%d", button);
-    Monitor.println(buf);
-  
-    //printMonitor("error=", error_pid);
-    //printMonitor("pv=", pv);
-    k_sleep(K_MSEC(500));
+    Monitor.println(buf); 
+    k_sleep(K_MSEC(1000));
 }
   
 
