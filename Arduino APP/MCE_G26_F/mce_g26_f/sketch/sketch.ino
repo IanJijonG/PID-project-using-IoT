@@ -1,7 +1,7 @@
 #include "Arduino_RouterBridge.h"
 #include <zephyr/kernel.h>   // k_thread, k_mutex, k_sleep, atomic_t
 
-// Pines   //Pin 9 reservado para timer zephyr
+// Pines   //Pin 9 y 5 reservado para timer zephyr
 #define PWM_PIN_der    10
 #define PWM_PIN_izq    11
 #define ENCODER_A  7
